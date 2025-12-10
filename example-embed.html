@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Chat Widget Embedding Example</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      max-width: 800px;
+      margin: 50px auto;
+      padding: 20px;
+      line-height: 1.6;
+    }
+    .code-block {
+      background: #f4f4f4;
+      padding: 15px;
+      border-radius: 5px;
+      overflow-x: auto;
+      margin: 20px 0;
+    }
+    code {
+      font-family: 'Courier New', monospace;
+    }
+  </style>
+</head>
+<body>
+  <h1>Chat Widget Embedding Example</h1>
+  
+  <p>This is an example page showing how to embed the Chat Widget.</p>
+  
+  <h2>Embed Code</h2>
+  <p>Add this script tag before the closing <code>&lt;/body&gt;</code> tag:</p>
+  
+  <div class="code-block">
+    <code>
+      &lt;script <br>
+      &nbsp;&nbsp;src="https://your-cdn.com/widget/widget-loader.js" <br>
+      &nbsp;&nbsp;data-api-key="sk_live_abc123..." <br>
+      &nbsp;&nbsp;data-api-url="https://api.yourdomain.com" <br>
+      &nbsp;&nbsp;data-widget-url="https://your-cdn.com/widget" <br>
+      &gt;&lt;/script&gt;
+    </code>
+  </div>
+  
+  <h2>Configuration</h2>
+  <ul>
+    <li><strong>data-api-key</strong>: Your API key (required)</li>
+    <li><strong>data-api-url</strong>: Backend API URL (optional)</li>
+    <li><strong>data-widget-url</strong>: Widget CDN URL (required)</li>
+  </ul>
+  
+  <h2>Widget Location</h2>
+  <p>The chat widget will appear as a floating button in the bottom-right corner of the page.</p>
+  
+  <!-- 
+    EMBED THE WIDGET HERE
+    Replace the placeholder values with your actual values:
+    - Replace "your-cdn.com" with your CDN domain
+    - Replace "sk_live_abc123..." with actual API key
+    - Replace "api.yourdomain.com" with your API domain
+  -->
+  <script 
+    src="https://your-cdn.com/widget/widget-loader.js" 
+    data-api-key="sk_live_abc123..." 
+    data-api-url="https://api.yourdomain.com"
+    data-widget-url="https://your-cdn.com/widget"
+  ></script>
+  
+</body>
+</html>
+

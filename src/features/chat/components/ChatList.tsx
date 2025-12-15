@@ -55,38 +55,38 @@ export function ChatList({ onClose, onSelectChat, onNewChat }: ChatListProps) {
   };
 
   return (
-    <div className="flex flex-col h-full">
-      <div className="p-3 sm:p-4 border-b flex items-center justify-between shrink-0">
-        <h2 className="text-base sm:text-lg font-semibold">Chats</h2>
-        <div className="flex items-center gap-1">
-          <Button onClick={handleCreateChat} size="icon" variant="ghost" className="shrink-0">
-            <Plus className="size-4 sm:size-5" />
-            <span className="sr-only">New chat</span>
+    <div className="widget-flex widget-flex-col" style={{ height: '100%' }}>
+      <div className="widget-chat-list-header">
+        <h2 className="widget-chat-list-title">Chats</h2>
+        <div className="widget-flex widget-items-center widget-gap-1">
+          <Button onClick={handleCreateChat} size="icon" variant="ghost" style={{ flexShrink: 0 }}>
+            <Plus style={{ width: '1rem', height: '1rem' }} />
+            <span className="widget-sr-only">New chat</span>
           </Button>
           {onClose && (
-            <Button onClick={onClose} size="icon" variant="ghost" className="shrink-0 md:hidden" aria-label="Close chat">
-              <X className="size-4 sm:size-5" />
-              <span className="sr-only">Close</span>
+            <Button onClick={onClose} size="icon" variant="ghost" className="widget-shrink-0" style={{ flexShrink: 0 }} aria-label="Close chat">
+              <X style={{ width: '1rem', height: '1rem' }} />
+              <span className="widget-sr-only">Close</span>
             </Button>
           )}
         </div>
       </div>
 
       {isLoading ? (
-        <div className="flex-1 flex items-center justify-center">
-          <Loader2 className="size-6 animate-spin text-muted-foreground" />
+        <div className="widget-flex" style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+          <Loader2 className="widget-loader-spinner" />
         </div>
       ) : chats.length === 0 ? (
-        <div className="flex-1 flex flex-col items-center justify-center p-6 sm:p-8 text-center">
-          <p className="text-sm sm:text-base text-muted-foreground mb-4 px-4">No chats yet. Start a new conversation!</p>
-          <Button onClick={handleCreateChat} size="sm" className="sm:size-default">
-            <Plus className="size-4 mr-2" />
+        <div className="widget-flex widget-flex-col widget-items-center widget-justify-center" style={{ flex: 1, padding: '1.5rem', textAlign: 'center' }}>
+          <p className="widget-text-sm widget-text-muted" style={{ marginBottom: '1rem', padding: '0 1rem' }}>No chats yet. Start a new conversation!</p>
+          <Button onClick={handleCreateChat} size="sm">
+            <Plus style={{ width: '1rem', height: '1rem', marginRight: '0.5rem' }} />
             Start New Chat
           </Button>
         </div>
       ) : (
-        <ScrollArea className="flex-1">
-          <div className="p-3 sm:p-4 space-y-2">
+        <ScrollArea className="widget-scroll-area" style={{ flex: 1 }}>
+          <div className="widget-p-3" style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
             {chats.map((chat) => (
               <ChatListItem
                 key={chat.id}
@@ -101,4 +101,3 @@ export function ChatList({ onClose, onSelectChat, onNewChat }: ChatListProps) {
     </div>
   );
 }
-

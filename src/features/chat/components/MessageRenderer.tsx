@@ -1,7 +1,6 @@
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import rehypeHighlight from "rehype-highlight";
-import { cn } from "@/lib/utils";
 
 interface MessageRendererProps {
   content: string;
@@ -9,39 +8,96 @@ interface MessageRendererProps {
 }
 
 export function MessageRenderer({ content, isUser = false }: MessageRendererProps) {
+  const baseStyles = {
+    maxWidth: 'none',
+    fontSize: 'var(--widget-font-size-sm)',
+    fontFamily: 'var(--widget-font-family)',
+    lineHeight: 1.6,
+    color: isUser ? '#ffffff' : 'var(--widget-text)',
+  };
+
   return (
-    <div className={cn(
-      "prose prose-sm dark:prose-invert max-w-none text-xs sm:text-sm",
-      isUser && "prose-invert text-white" // Force white text for user messages to ensure email visibility
-    )}>
+    <div style={baseStyles}>
       <ReactMarkdown
         remarkPlugins={[remarkGfm]}
         rehypePlugins={[rehypeHighlight]}
         components={{
-          p: ({ children }) => <p className={cn("mb-1.5 sm:mb-2 last:mb-0 leading-relaxed", isUser && "text-white")}>{children}</p>,
+          p: ({ children }) => (
+            <p style={{ 
+              marginBottom: '0.375rem', 
+              lineHeight: 1.6,
+              color: isUser ? '#ffffff' : 'var(--widget-text)'
+            }}>
+              {children}
+            </p>
+          ),
           h1: ({ children }) => (
-            <h1 className={cn("text-lg sm:text-xl font-bold mb-1.5 sm:mb-2 mt-3 sm:mt-4", isUser && "text-white")}>{children}</h1>
+            <h1 style={{ 
+              fontSize: 'var(--widget-font-size-lg)', 
+              fontWeight: 700, 
+              marginBottom: '0.375rem', 
+              marginTop: '0.75rem',
+              color: isUser ? '#ffffff' : 'var(--widget-text)'
+            }}>
+              {children}
+            </h1>
           ),
           h2: ({ children }) => (
-            <h2 className={cn("text-base sm:text-lg font-semibold mb-1.5 sm:mb-2 mt-2 sm:mt-3", isUser && "text-white")}>{children}</h2>
+            <h2 style={{ 
+              fontSize: 'var(--widget-font-size-base)', 
+              fontWeight: 600, 
+              marginBottom: '0.375rem', 
+              marginTop: '0.5rem',
+              color: isUser ? '#ffffff' : 'var(--widget-text)'
+            }}>
+              {children}
+            </h2>
           ),
           h3: ({ children }) => (
-            <h3 className={cn("text-sm sm:text-base font-semibold mb-1 sm:mb-1 mt-1.5 sm:mt-2", isUser && "text-white")}>{children}</h3>
+            <h3 style={{ 
+              fontSize: 'var(--widget-font-size-sm)', 
+              fontWeight: 600, 
+              marginBottom: '0.25rem', 
+              marginTop: '0.375rem',
+              color: isUser ? '#ffffff' : 'var(--widget-text)'
+            }}>
+              {children}
+            </h3>
           ),
           ul: ({ children }) => (
-            <ul className={cn("list-disc list-inside mb-1.5 sm:mb-2 space-y-0.5 sm:space-y-1", isUser && "text-white")}>{children}</ul>
+            <ul style={{ 
+              listStyle: 'disc', 
+              listStylePosition: 'inside', 
+              marginBottom: '0.375rem', 
+              paddingLeft: '0',
+              color: isUser ? '#ffffff' : 'var(--widget-text)'
+            }}>
+              {children}
+            </ul>
           ),
           ol: ({ children }) => (
-            <ol className={cn("list-decimal list-inside mb-1.5 sm:mb-2 space-y-0.5 sm:space-y-1", isUser && "text-white")}>{children}</ol>
+            <ol style={{ 
+              listStyle: 'decimal', 
+              listStylePosition: 'inside', 
+              marginBottom: '0.375rem',
+              paddingLeft: '0',
+              color: isUser ? '#ffffff' : 'var(--widget-text)'
+            }}>
+              {children}
+            </ol>
           ),
           code: ({ className, children, ...props }) => {
             const isInline = !className;
             return isInline ? (
               <code
-                className={cn(
-                  "bg-muted px-1 sm:px-1.5 py-0.5 rounded text-[10px] sm:text-sm font-mono",
-                  isUser && "bg-white/20 text-white"
-                )}
+                style={{
+                  background: isUser ? 'rgba(255, 255, 255, 0.2)' : 'var(--widget-muted)',
+                  padding: '0.125rem 0.375rem',
+                  borderRadius: 'var(--widget-radius-sm)',
+                  fontSize: 'var(--widget-font-size-xs)',
+                  fontFamily: 'monospace',
+                  color: isUser ? '#ffffff' : 'var(--widget-text)',
+                }}
                 {...props}
               >
                 {children}
@@ -53,7 +109,15 @@ export function MessageRenderer({ content, isUser = false }: MessageRendererProp
             );
           },
           pre: ({ children }) => (
-            <pre className={cn("bg-muted p-2 sm:p-3 rounded-lg overflow-x-auto mb-1.5 sm:mb-2 text-[10px] sm:text-xs", isUser && "bg-white/20 text-white")}>
+            <pre style={{ 
+              background: isUser ? 'rgba(255, 255, 255, 0.2)' : 'var(--widget-muted)', 
+              padding: '0.5rem', 
+              borderRadius: 'var(--widget-radius-lg)', 
+              overflowX: 'auto', 
+              marginBottom: '0.375rem',
+              fontSize: 'var(--widget-font-size-xs)',
+              color: isUser ? '#ffffff' : 'var(--widget-text)',
+            }}>
               {children}
             </pre>
           ),
@@ -62,10 +126,17 @@ export function MessageRenderer({ content, isUser = false }: MessageRendererProp
               href={href}
               target="_blank"
               rel="noopener noreferrer"
-              className={cn(
-                "underline hover:opacity-80 break-words",
-                isUser ? "text-white" : "text-primary"
-              )}
+              style={{
+                textDecoration: 'underline',
+                color: isUser ? '#ffffff' : 'var(--widget-primary)',
+                wordBreak: 'break-word',
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.opacity = '0.8';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.opacity = '1';
+              }}
             >
               {children}
             </a>
@@ -77,4 +148,3 @@ export function MessageRenderer({ content, isUser = false }: MessageRendererProp
     </div>
   );
 }
-

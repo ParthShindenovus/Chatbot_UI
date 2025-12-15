@@ -10,8 +10,8 @@ interface SuggestionsProps {
 export function Suggestions({ suggestions, isLoading = false, onSelect }: SuggestionsProps) {
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center p-4">
-        <Loader2 className="size-4 animate-spin text-muted-foreground" />
+      <div className="widget-flex widget-items-center widget-justify-center widget-p-4">
+        <Loader2 className="widget-loader-spinner" />
       </div>
     );
   }
@@ -24,18 +24,17 @@ export function Suggestions({ suggestions, isLoading = false, onSelect }: Sugges
   const topSuggestions = suggestions.slice(0, 3);
 
   return (
-    <div className="mt-4 space-y-2">
+    <div className="widget-suggestions">
       {topSuggestions.map((suggestion, index) => (
         <Button
           key={index}
           variant="outline"
-          className="w-full justify-start text-left h-auto py-2.5 px-4 whitespace-normal hover:bg-accent"
+          className="widget-suggestion-button"
           onClick={() => onSelect(suggestion)}
         >
-          <span className="text-sm">{suggestion}</span>
+          <span className="widget-suggestion-text">{suggestion}</span>
         </Button>
       ))}
     </div>
   );
 }
-

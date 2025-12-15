@@ -2,7 +2,6 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Trash2 } from "lucide-react";
-import { cn } from "@/lib/utils";
 import type { ChatSummary } from "../types";
 
 interface ChatListItemProps {
@@ -35,40 +34,42 @@ export function ChatListItem({ chat, onClick, onDelete }: ChatListItemProps) {
   return (
     <Card
       onClick={onClick}
-      className={cn(
-        "p-3 sm:p-4 cursor-pointer transition-all hover:bg-accent/50 active:bg-accent/70",
-        chat.isActive && "bg-accent border-primary"
-      )}
+      className={`widget-chat-list-item ${chat.isActive ? "widget-chat-list-item-active" : ""}`}
     >
-      <div className="flex items-start justify-between gap-2">
-        <div className="flex-1 min-w-0" onClick={onClick}>
-          <div className="flex items-center gap-2 mb-1">
-            <h3 className="font-semibold text-xs sm:text-sm truncate">{chat.title}</h3>
+      <div className="widget-flex widget-items-center widget-justify-between widget-gap-2">
+        <div className="widget-chat-list-item-content" onClick={onClick}>
+          <div className="widget-chat-list-item-title-row">
+            <h3 className="widget-chat-list-item-title">{chat.title}</h3>
             {chat.unreadCount > 0 && (
-              <Badge variant="default" className="shrink-0 text-[10px] sm:text-xs px-1.5 sm:px-2">
+              <Badge variant="default" className="widget-text-xs" style={{ flexShrink: 0, padding: '0 0.375rem' }}>
                 {chat.unreadCount}
               </Badge>
             )}
           </div>
           {chat.lastMessage && (
-            <p className="text-xs sm:text-sm text-muted-foreground truncate">
+            <p className="widget-chat-list-item-message">
               {chat.lastMessage}
             </p>
           )}
         </div>
-        <div className="flex items-center gap-2 shrink-0">
-          <span className="text-[10px] sm:text-xs text-muted-foreground">
+        <div className="widget-flex widget-items-center widget-gap-2" style={{ flexShrink: 0 }}>
+          <span className="widget-text-xs widget-text-muted">
             {formatTime(chat.lastMessageTime)}
           </span>
           {onDelete && (
             <Button
               onClick={handleDelete}
-              size="icon"
+              size="icon-sm"
               variant="ghost"
-              className="h-6 w-6 sm:h-7 sm:w-7 text-muted-foreground hover:text-destructive"
+              className="widget-text-muted"
+              style={{ 
+                height: '1.5rem', 
+                width: '1.5rem',
+                color: 'var(--widget-muted-text)'
+              }}
               aria-label="Delete chat"
             >
-              <Trash2 className="h-3 w-3 sm:h-4 sm:w-4" />
+              <Trash2 style={{ width: '0.75rem', height: '0.75rem' }} />
             </Button>
           )}
         </div>
@@ -76,4 +77,3 @@ export function ChatListItem({ chat, onClick, onDelete }: ChatListItemProps) {
     </Card>
   );
 }
-

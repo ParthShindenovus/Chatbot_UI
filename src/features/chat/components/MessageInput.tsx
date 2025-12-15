@@ -41,14 +41,15 @@ export const MessageInput = forwardRef<MessageInputHandle, MessageInputProps>(
     };
 
     return (
-      <form onSubmit={handleSubmit} className="flex gap-2 p-3 sm:p-4 border-t">
+      <form onSubmit={handleSubmit} className="widget-message-input-form">
         <Input
           ref={inputElementRef}
           value={message}
           onChange={(e) => setMessage(e.target.value)}
           placeholder={placeholder}
           disabled={disabled}
-          className="flex-1 text-sm sm:text-base"
+          className="widget-text-sm"
+          style={{ flex: 1 }}
           onKeyDown={(e) => {
             if (e.key === "Enter" && !e.shiftKey) {
               e.preventDefault();
@@ -56,9 +57,14 @@ export const MessageInput = forwardRef<MessageInputHandle, MessageInputProps>(
             }
           }}
         />
-        <Button type="submit" disabled={disabled || !message.trim()} size="icon" className="shrink-0 size-9 sm:size-10">
-          <Send className="size-4 sm:size-5" />
-          <span className="sr-only">Send message</span>
+        <Button 
+          type="submit" 
+          disabled={disabled || !message.trim()} 
+          size="icon" 
+          className="widget-message-input-send"
+        >
+          <Send style={{ width: '1rem', height: '1rem' }} />
+          <span className="widget-sr-only">Send message</span>
         </Button>
       </form>
     );
@@ -66,4 +72,3 @@ export const MessageInput = forwardRef<MessageInputHandle, MessageInputProps>(
 );
 
 MessageInput.displayName = "MessageInput";
-

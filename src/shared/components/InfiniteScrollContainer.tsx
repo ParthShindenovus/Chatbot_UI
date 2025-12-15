@@ -63,13 +63,12 @@ export function InfiniteScrollContainer({
     <div className={className}>
       {children}
       {hasMore && (
-        <div ref={sentinelRef} className="h-8 flex items-center justify-center py-4">
+        <div ref={sentinelRef} style={{ height: '2rem', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem 0' }}>
           {isLoading && (
-            <div className="text-xs text-muted-foreground">Loading older messages...</div>
+            <div className="widget-text-xs widget-text-muted">Loading older messages...</div>
           )}
         </div>
       )}
     </div>
   );
 }
-

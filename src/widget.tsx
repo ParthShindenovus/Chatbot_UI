@@ -41,13 +41,31 @@ function initWidget(config: WidgetConfig = {}) {
 
   // Initialize session with API key (will be done automatically by ChatWidget component)
 
-  // Render widget
+  // Add isolation wrapper with inline styles for maximum protection
+  const wrapperStyle: React.CSSProperties = {
+    all: 'unset',
+    display: 'block',
+    fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", "Roboto", sans-serif',
+    fontSize: '14px',
+    lineHeight: '1.5',
+    color: '#000',
+    boxSizing: 'border-box',
+    isolation: 'isolate',
+  };
+
+  // Render widget with isolation wrapper
   const root = createRoot(container)
   root.render(
     <StrictMode>
-      <QueryClientProvider client={queryClient}>
-        <ChatWidget />
-      </QueryClientProvider>
+      <div 
+        className="chat-widget-wrapper" 
+        style={wrapperStyle}
+        data-widget-isolated="true"
+      >
+        <QueryClientProvider client={queryClient}>
+          <ChatWidget />
+        </QueryClientProvider>
+      </div>
     </StrictMode>
   )
 

@@ -80,19 +80,37 @@ export function ChatWidget() {
 
   if (error) {
     return (
-      <div className="fixed bottom-4 right-4 z-50 p-4 bg-red-50 border border-red-200 rounded-lg shadow-lg max-w-sm">
-        <p className="text-sm text-red-800">Failed to initialize chat widget: {error}</p>
+      <div style={{ 
+        position: 'fixed', 
+        bottom: '1rem', 
+        right: '1rem', 
+        zIndex: 999999, 
+        padding: '1rem', 
+        background: '#fef2f2', 
+        border: '1px solid #fecaca', 
+        borderRadius: 'var(--widget-radius-lg)', 
+        boxShadow: '0 10px 15px -3px var(--widget-shadow), 0 4px 6px -2px var(--widget-shadow)', 
+        maxWidth: '24rem' 
+      }}>
+        <p className="widget-text-sm" style={{ color: '#991b1b' }}>Failed to initialize chat widget: {error}</p>
       </div>
     );
   }
 
   if (!initialized) {
     return (
-      <div className="fixed bottom-4 right-4 z-50">
-        <div className="bg-card border rounded-lg shadow-lg p-3 animate-pulse">
-          <div className="flex items-center gap-2">
-            <div className="size-2 bg-primary rounded-full"></div>
-            <span className="text-xs text-muted-foreground">Initializing...</span>
+      <div style={{ position: 'fixed', bottom: '1rem', right: '1rem', zIndex: 999999 }}>
+        <div style={{ 
+          background: 'var(--widget-bg)', 
+          border: '1px solid var(--widget-border)', 
+          borderRadius: 'var(--widget-radius-lg)', 
+          boxShadow: '0 10px 15px -3px var(--widget-shadow), 0 4px 6px -2px var(--widget-shadow)', 
+          padding: '0.75rem',
+          animation: 'widget-pulse 2s ease-in-out infinite'
+        }}>
+          <div className="widget-flex widget-items-center widget-gap-2">
+            <div style={{ width: '0.5rem', height: '0.5rem', background: 'var(--widget-primary)', borderRadius: '9999px' }}></div>
+            <span className="widget-text-xs widget-text-muted">Initializing...</span>
           </div>
         </div>
       </div>
@@ -114,4 +132,3 @@ export function ChatWidget() {
     </>
   );
 }
-

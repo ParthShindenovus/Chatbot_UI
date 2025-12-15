@@ -56,9 +56,36 @@
     return;
   }
 
-  // Create container
+  // Create container with maximum CSS isolation
   const container = document.createElement('div');
   container.id = WIDGET_CONFIG.containerId;
+  container.className = 'chat-widget-isolated chat-widget-wrapper';
+  
+  // Add inline styles for immediate protection (before CSS loads)
+  container.setAttribute('style', `
+    all: initial !important;
+    display: block !important;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif !important;
+    font-size: 14px !important;
+    line-height: 1.5 !important;
+    color: #000000 !important;
+    background: transparent !important;
+    position: fixed !important;
+    z-index: 999999 !important;
+    isolation: isolate !important;
+    box-sizing: border-box !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    border: none !important;
+    outline: none !important;
+    text-align: left !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+    pointer-events: auto !important;
+    transform: none !important;
+    filter: none !important;
+  `);
+  
   document.body.appendChild(container);
 
   // Store config in window for widget to access
@@ -70,7 +97,76 @@
 
   // Load widget script and styles
   function loadWidget() {
-    // Load CSS first
+    // Inject comprehensive critical CSS immediately for maximum isolation
+    const criticalCSS = `
+      /* Widget Container Isolation - Prevents conflicts with host website */
+      #${WIDGET_CONFIG.containerId} {
+        all: initial !important;
+        display: block !important;
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif !important;
+        font-size: 14px !important;
+        line-height: 1.5 !important;
+        color: #000000 !important;
+        background: transparent !important;
+        position: fixed !important;
+        z-index: 999999 !important;
+        isolation: isolate !important;
+        box-sizing: border-box !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        border: none !important;
+        outline: none !important;
+        text-align: left !important;
+        visibility: visible !important;
+        opacity: 1 !important;
+        pointer-events: auto !important;
+      }
+      
+      /* Reset all children to prevent host website style inheritance */
+      #${WIDGET_CONFIG.containerId} *,
+      #${WIDGET_CONFIG.containerId} *::before,
+      #${WIDGET_CONFIG.containerId} *::after {
+        box-sizing: border-box !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        border: 0 !important;
+        font-size: inherit !important;
+        font-family: inherit !important;
+        line-height: inherit !important;
+        color: inherit !important;
+        background: transparent !important;
+        text-align: inherit !important;
+        text-decoration: none !important;
+        text-transform: none !important;
+        letter-spacing: normal !important;
+        word-spacing: normal !important;
+        vertical-align: baseline !important;
+      }
+      
+      /* Prevent host website styles from affecting widget elements */
+      #${WIDGET_CONFIG.containerId} a,
+      #${WIDGET_CONFIG.containerId} button,
+      #${WIDGET_CONFIG.containerId} input,
+      #${WIDGET_CONFIG.containerId} textarea,
+      #${WIDGET_CONFIG.containerId} select {
+        font-family: inherit !important;
+        font-size: inherit !important;
+        line-height: inherit !important;
+        color: inherit !important;
+        background: transparent !important;
+        border: none !important;
+        outline: none !important;
+        box-shadow: none !important;
+        text-shadow: none !important;
+      }
+    `;
+    
+    const style = document.createElement('style');
+    style.id = 'chat-widget-critical-css';
+    style.textContent = criticalCSS;
+    document.head.appendChild(style);
+    
+    // Load CSS file with error handling
     const link = document.createElement('link');
     link.rel = 'stylesheet';
     link.href = `${WIDGET_CONFIG.widgetUrl}/widget.css`;

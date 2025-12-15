@@ -8,21 +8,21 @@ interface StartScreenProps {
 
 export function StartScreen({ onStartChat, isLoading = false }: StartScreenProps) {
   return (
-    <div className="flex flex-col items-center justify-center h-full min-h-[400px] p-6 overflow-hidden">
-      <div className="text-center space-y-4 max-w-sm">
-        <div className="flex justify-center">
-          <div className="size-16 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
-            <MessageCircle className="size-8 text-primary" />
+    <div className="widget-start-screen">
+      <div className="widget-start-content">
+        <div className="widget-start-icon-container">
+          <div className="widget-start-icon-circle">
+            <MessageCircle style={{ width: '2rem', height: '2rem', color: 'var(--widget-primary)' }} />
           </div>
         </div>
-        <h2 className="text-xl font-semibold break-words">Welcome to WhipSmart Chat</h2>
-        <p className="text-sm text-muted-foreground break-words">
+        <h2 className="widget-start-title">Welcome to WhipSmart Chat</h2>
+        <p className="widget-start-description">
           How can we help you today?
         </p>
-        <Button onClick={onStartChat} size="lg" className="mt-4" disabled={isLoading}>
+        <Button onClick={onStartChat} size="lg" className="widget-mt-4" disabled={isLoading}>
           {isLoading ? (
             <>
-              <Loader2 className="mr-2 size-4 animate-spin" />
+              <Loader2 className="widget-loader-spinner" style={{ marginRight: '0.5rem' }} />
               Starting...
             </>
           ) : (
@@ -33,4 +33,3 @@ export function StartScreen({ onStartChat, isLoading = false }: StartScreenProps
     </div>
   );
 }
-

@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { ChatListItem } from "./ChatListItem";
@@ -30,7 +31,14 @@ const sessionToChatSummary = (session: Session) => ({
 export function ChatList({ onClose, onSelectChat, onNewChat }: ChatListProps) {
   const { selectChat } = useChatStore();
   const { visitorId } = useSessionStore();
-  const { data: sessions = [], isLoading } = useChatsQuery(visitorId);
+  const { data: sessions = [], isLoading, refetch } = useChatsQuery(visitorId);
+
+  // Refetch sessions when chat list screen opens
+  useEffect(() => {
+    if (visitorId) {
+      refetch();
+    }
+  }, [visitorId, refetch]);
 
   // Convert sessions to chat summaries
   const chats = sessions.map(sessionToChatSummary);

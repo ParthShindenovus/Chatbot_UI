@@ -122,6 +122,13 @@ export const getSession = async (sessionId: string): Promise<Session> => {
   return response.data.data;
 };
 
+export interface SessionsListResponse {
+  results: Session[];
+  count: number;
+  next: string | null;
+  previous: string | null;
+}
+
 export const listSessions = async (
   visitorId?: string,
   isActive?: boolean
@@ -130,13 +137,15 @@ export const listSessions = async (
   if (visitorId) params.append("visitor_id", visitorId);
   if (isActive !== undefined) params.append("is_active", String(isActive));
 
-  const response = await axios.get<ApiResponse<{ results: Session[]; count: number }>>(
+  // API returns: { success: true, data: { results: { count, next, previous, results: [...] } } }
+  const response = await axios.get<ApiResponse<{ results: SessionsListResponse }>>(
     `/api/chats/sessions/?${params.toString()}`
   );
   if (!response.data.success) {
     throw new Error(response.data.message || "Failed to list sessions");
   }
-  return response.data.data.results;
+  // Access nested results: data.results.results
+  return response.data.data.results.results || [];
 };
 
 export const deleteSession = async (sessionId: string): Promise<void> => {

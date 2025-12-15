@@ -247,16 +247,54 @@ export function useSendMessageMutation() {
 }
 
 /**
- * Query hook for fetching chat list (sessions)
+ * Query hook for fetching chat list (sessions) - Legacy, use useChatsInfiniteQuery instead
  */
 export function useChatsQuery(visitorId: string | null) {
   return useQuery({
     queryKey: visitorId ? chatKeys.list(visitorId) : ["chats", "null"],
     queryFn: async () => {
       if (!visitorId) return [];
-      return await listSessions(visitorId);
+      const { sessions } = await listSessions(visitorId);
+      return sessions;
     },
     enabled: !!visitorId,
+    staleTime: 1000 * 60 * 2, // 2 minutes
+    refetchOnWindowFocus: false,
+  });
+}
+
+/**
+ * Infinite query hook for fetching chat list (sessions) with pagination
+ * Initial load: 10 sessions, then loads more on scroll
+ * Follows TanStack Query infinite query pattern: https://tanstack.com/query/v5/docs/framework/react/guides/infinite-queries
+ */
+export function useChatsInfiniteQuery(visitorId: string | null) {
+  return useInfiniteQuery({
+    queryKey: visitorId ? [...chatKeys.list(visitorId), "infinite"] : ["chats", "null", "infinite"],
+    queryFn: async ({ pageParam = 0 }) => {
+      if (!visitorId) {
+        return { sessions: [], hasMore: false, total: 0 };
+      }
+      const limit = pageParam === 0 ? 10 : 20; // First page: 10, subsequent: 20
+      const { sessions, hasMore, total } = await listSessions(visitorId, undefined, limit, pageParam);
+      // Return page data directly (sessions array) - TanStack Query will wrap it in pages array
+      return {
+        sessions,
+        hasMore,
+        total,
+      };
+    },
+    enabled: !!visitorId,
+    initialPageParam: 0,
+    getNextPageParam: (lastPage, _allPages, lastPageParam) => {
+      // Return undefined when there's no more data (per TanStack Query docs)
+      if (!lastPage.hasMore) {
+        return undefined;
+      }
+      // Calculate next offset: use lastPageParam (current offset) + last page size
+      const lastPageSize = lastPage.sessions.length;
+      return (lastPageParam as number) + lastPageSize;
+    },
     staleTime: 1000 * 60 * 2, // 2 minutes
     refetchOnWindowFocus: false,
   });
@@ -277,7 +315,7 @@ export function useCreateSessionMutation() {
       return await createSession(visitorId);
     },
     onSuccess: (_session) => {
-      // Invalidate chats list to show new session
+      // Invalidate chats list (both regular and infinite) to show new session
       if (visitorId) {
         queryClient.invalidateQueries({ queryKey: chatKeys.list(visitorId) });
       }

@@ -33,6 +33,8 @@ export interface Session {
   expires_at?: string;
   is_active: boolean;
   metadata?: Record<string, any>;
+  last_message?: string | null;
+  last_message_at?: string | null;
 }
 
 export interface Message {
@@ -131,11 +133,15 @@ export interface SessionsListResponse {
 
 export const listSessions = async (
   visitorId?: string,
-  isActive?: boolean
-): Promise<Session[]> => {
+  isActive?: boolean,
+  limit?: number,
+  offset?: number
+): Promise<{ sessions: Session[]; hasMore: boolean; total: number }> => {
   const params = new URLSearchParams();
   if (visitorId) params.append("visitor_id", visitorId);
   if (isActive !== undefined) params.append("is_active", String(isActive));
+  if (limit) params.append("limit", String(limit));
+  if (offset !== undefined) params.append("offset", String(offset));
 
   // API returns: { success: true, data: { results: { count, next, previous, results: [...] } } }
   const response = await axios.get<ApiResponse<{ results: SessionsListResponse }>>(
@@ -145,7 +151,12 @@ export const listSessions = async (
     throw new Error(response.data.message || "Failed to list sessions");
   }
   // Access nested results: data.results.results
-  return response.data.data.results.results || [];
+  const sessions = response.data.data.results.results || [];
+  const total = response.data.data.results.count || 0;
+  const currentCount = (offset || 0) + sessions.length;
+  const hasMore = currentCount < total;
+  
+  return { sessions, hasMore, total };
 };
 
 export const deleteSession = async (sessionId: string): Promise<void> => {

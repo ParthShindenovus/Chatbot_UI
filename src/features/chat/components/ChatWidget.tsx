@@ -1,6 +1,4 @@
-import { useState, useEffect } from "react";
 import { ChatButton } from "./ChatButton";
-import { StartScreen } from "./StartScreen";
 import { ChatScreen } from "./ChatScreen";
 import { ChatList } from "./ChatList";
 import { FloatingPanel } from "@/shared/components";
@@ -8,7 +6,6 @@ import { useSessionStore } from "../store/sessionStore";
 import { useChatStore } from "../store/chatStore";
 import { useWidgetInitialization } from "../hooks/useWidgetInitialization";
 import { useWidgetState } from "../hooks/useWidgetState";
-import { useCreateSessionMutation, useChatsQuery } from "../useQueries";
 
 /**
  * ChatWidget Component
@@ -19,43 +16,12 @@ export function ChatWidget() {
   useWidgetInitialization();
   const { isOpen, widgetState, setWidgetState, handleOpen, handleClose } = useWidgetState();
   
-  const [isInitializing, setIsInitializing] = useState(false);
-  const { initialized, error, visitorId, initVisitor } = useSessionStore();
+  const { initialized, error } = useSessionStore();
   const { activeChatId, selectChat } = useChatStore();
-  const createSessionMutation = useCreateSessionMutation();
-  const { data: chats = [], isLoading: isLoadingChats } = useChatsQuery(visitorId);
-
-  const handleStartChat = async () => {
-    setIsInitializing(true);
-    try {
-      let currentVisitorId = visitorId;
-      if (!currentVisitorId) {
-        currentVisitorId = await initVisitor();
-      }
-
-      const session = await createSessionMutation.mutateAsync();
-      
-      // Create temp chat ID for immediate UI feedback
-      const tempChatId = `temp_new_chat_${Date.now()}`;
-      selectChat(tempChatId);
-
-      // Update to real session ID
-      selectChat(session.id);
-      setWidgetState("chat");
-    } catch (error) {
-      console.error("Failed to initialize chat:", error);
-    } finally {
-      setIsInitializing(false);
-    }
-  };
 
   const handleBackToList = () => {
     selectChat(null);
-    if (chats.length > 0) {
-      setWidgetState("chat-list");
-    } else {
-      setWidgetState("start");
-    }
+    setWidgetState("chat-list");
   };
 
   const handleSelectChat = (chatId: string) => {
@@ -63,31 +29,15 @@ export function ChatWidget() {
     setWidgetState("chat");
   };
 
-  const handleNewChat = () => {
-    handleStartChat();
-  };
-
   const handleOpenWithState = () => {
     handleOpen();
+    // Always start with chat list, or chat if there's an active chat
     if (activeChatId) {
       setWidgetState("chat");
-    } else if (chats.length > 0) {
-      setWidgetState("chat-list");
     } else {
-      setWidgetState("start");
-    }
-  };
-
-  const handleViewChats = () => {
-    setWidgetState("chat-list");
-  };
-
-  // Automatically show chat list when sessions are loaded and widget is open
-  useEffect(() => {
-    if (isOpen && !isLoadingChats && chats.length > 0 && widgetState === "start" && !activeChatId) {
       setWidgetState("chat-list");
     }
-  }, [isOpen, isLoadingChats, chats.length, widgetState, activeChatId, setWidgetState]);
+  };
 
   if (error) {
     return (
@@ -132,16 +82,8 @@ export function ChatWidget() {
     <>
       <ChatButton onClick={handleOpenWithState} />
       <FloatingPanel isOpen={isOpen} onClose={handleClose}>
-        {widgetState === "start" && (
-          <StartScreen 
-            onStartChat={handleStartChat} 
-            onViewChats={chats.length > 0 ? handleViewChats : undefined}
-            isLoading={isInitializing}
-            hasExistingChats={chats.length > 0}
-          />
-        )}
         {widgetState === "chat-list" && (
-          <ChatList onClose={handleClose} onSelectChat={handleSelectChat} onNewChat={handleNewChat} />
+          <ChatList onClose={handleClose} onSelectChat={handleSelectChat} />
         )}
         {widgetState === "chat" && activeChatId && (
           <ChatScreen chatId={activeChatId} onBack={handleBackToList} onClose={handleClose} />

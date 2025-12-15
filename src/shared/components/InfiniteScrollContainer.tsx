@@ -7,6 +7,7 @@ interface InfiniteScrollContainerProps {
   hasMore: boolean;
   isLoading: boolean;
   className?: string;
+  style?: React.CSSProperties;
   scrollContainer?: HTMLElement | null;
 }
 
@@ -16,6 +17,7 @@ export function InfiniteScrollContainer({
   hasMore,
   isLoading,
   className = "",
+  style,
   scrollContainer,
 }: InfiniteScrollContainerProps) {
   const observerRef = useRef<IntersectionObserver | null>(null);
@@ -35,14 +37,18 @@ export function InfiniteScrollContainer({
       observerRef.current.unobserve(sentinelRef.current);
     }
 
+    // Use the provided scroll container or fallback to window
+    const root = scrollContainer || null;
+    
     const options: IntersectionObserverInit = {
-      root: scrollContainer || null,
-      rootMargin: "100px",
+      root: root,
+      rootMargin: "200px", // Increased margin to trigger earlier
       threshold: 0.1,
     };
 
     observerRef.current = new IntersectionObserver((entries) => {
-      if (entries[0].isIntersecting && hasMore && !isLoading) {
+      const entry = entries[0];
+      if (entry.isIntersecting && hasMore && !isLoading) {
         onLoadMore();
       }
     }, options);
@@ -60,12 +66,24 @@ export function InfiniteScrollContainer({
   }, [hasMore, isLoading, onLoadMore, scrollContainer]);
 
   return (
-    <div className={className}>
+    <div className={className} style={{ width: '100%', ...style }}>
       {children}
       {hasMore && (
-        <div ref={sentinelRef} style={{ height: '2rem', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem 0' }}>
+        <div 
+          ref={sentinelRef} 
+          style={{ 
+            height: '3rem', 
+            minHeight: '3rem',
+            display: 'flex', 
+            alignItems: 'center', 
+            justifyContent: 'center', 
+            padding: '1rem 0',
+            width: '100%',
+            visibility: 'visible' // Ensure sentinel is visible
+          }}
+        >
           {isLoading && (
-            <div className="widget-text-xs widget-text-muted">Loading older messages...</div>
+            <div className="widget-text-xs widget-text-muted">Loading more chats...</div>
           )}
         </div>
       )}

@@ -514,6 +514,7 @@
   flex-direction: column !important;
   overflow: hidden !important;
   animation: widget-slide-up 0.3s ease-out !important;
+  height: 100% !important;
 }
 
 /* Mobile: Fullscreen */
@@ -1000,20 +1001,24 @@
 
 #chat-widget-container .widget-loader,
 .chat-widget-isolated .widget-loader,
-.chat-widget-wrapper .widget-loader {
+.chat-widget-wrapper .widget-loader,
+.widget-loader {
   display: flex !important;
   align-items: center !important;
   justify-content: center !important;
   height: 100% !important;
+  width: 100% !important;
 }
 
 #chat-widget-container .widget-loader-spinner,
 .chat-widget-isolated .widget-loader-spinner,
-.chat-widget-wrapper .widget-loader-spinner {
+.chat-widget-wrapper .widget-loader-spinner,
+.widget-loader-spinner {
   width: 1.5rem !important;
   height: 1.5rem !important;
   animation: widget-spin 1s linear infinite !important;
   color: var(--widget-muted-text) !important;
+  display: block !important;
 }
 
 /* ============================================
@@ -1125,6 +1130,10 @@
   cursor: pointer !important;
   transition: all 0.2s !important;
   padding: 0.75rem !important;
+  width: 100% !important;
+  box-sizing: border-box !important;
+  overflow: hidden !important;
+  margin: 0 !important; /* Ensure no margin interferes with gap */
 }
 
 @media (min-width: 640px) {
@@ -1151,9 +1160,13 @@
 
 #chat-widget-container .widget-chat-list-item-content,
 .chat-widget-isolated .widget-chat-list-item-content,
-.chat-widget-wrapper .widget-chat-list-item-content {
+.chat-widget-wrapper .widget-chat-list-item-content,
+.widget-chat-list-item-content {
   flex: 1 !important;
   min-width: 0 !important;
+  max-width: 100% !important;
+  overflow: hidden !important;
+  width: 0 !important; /* Force flex item to respect max-width */
 }
 
 #chat-widget-container .widget-chat-list-item-title-row,
@@ -1187,19 +1200,25 @@
 
 #chat-widget-container .widget-chat-list-item-message,
 .chat-widget-isolated .widget-chat-list-item-message,
-.chat-widget-wrapper .widget-chat-list-item-message {
+.chat-widget-wrapper .widget-chat-list-item-message,
+.widget-chat-list-item-message {
   font-size: var(--widget-font-size-xs) !important;
   color: var(--widget-muted-text) !important;
   font-family: var(--widget-font-family) !important;
   overflow: hidden !important;
   text-overflow: ellipsis !important;
   white-space: nowrap !important;
+  max-width: 100% !important;
+  display: block !important;
+  width: 100% !important;
+  box-sizing: border-box !important;
 }
 
 @media (min-width: 640px) {
   #chat-widget-container .widget-chat-list-item-message,
   .chat-widget-isolated .widget-chat-list-item-message,
-  .chat-widget-wrapper .widget-chat-list-item-message {
+  .chat-widget-wrapper .widget-chat-list-item-message,
+  .widget-chat-list-item-message {
     font-size: var(--widget-font-size-sm) !important;
   }
 }

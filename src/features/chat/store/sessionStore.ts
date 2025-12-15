@@ -140,7 +140,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
     }
 
     try {
-      const sessions = await listSessions(state.visitorId, true);
+      const { sessions } = await listSessions(state.visitorId, true);
       return sessions;
     } catch (error) {
       console.error("Failed to load user sessions:", error);

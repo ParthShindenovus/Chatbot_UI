@@ -39,7 +39,7 @@ export function MessageBubble({ message, isStreaming = false }: MessageBubblePro
             "rounded-lg px-3 py-2 sm:px-4 sm:py-2.5",
             isUser
               ? "bg-primary text-primary-foreground"
-              : "bg-muted text-muted-foreground"
+              : "bg-muted text-foreground"
           )}
         >
           {isTypingIndicator ? (
@@ -53,7 +53,7 @@ export function MessageBubble({ message, isStreaming = false }: MessageBubblePro
             </div>
           ) : (
             <>
-              <MessageRenderer content={message.content} />
+              <MessageRenderer content={message.content} isUser={isUser} />
               {isStreaming && (
                 <span className="inline-block w-2 h-4 ml-1 bg-current animate-pulse" />
               )}

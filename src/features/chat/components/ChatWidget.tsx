@@ -1,57 +1,92 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { ChatButton } from "./ChatButton";
-import { ChatList } from "./ChatList";
+import { StartScreen } from "./StartScreen";
 import { ChatScreen } from "./ChatScreen";
+import { ChatList } from "./ChatList";
 import { FloatingPanel } from "@/shared/components";
 import { useSessionStore } from "../store/sessionStore";
 import { useChatStore } from "../store/chatStore";
+import { useWidgetInitialization } from "../hooks/useWidgetInitialization";
+import { useWidgetState } from "../hooks/useWidgetState";
+import { useCreateSessionMutation, useChatsQuery } from "../useQueries";
 
+/**
+ * ChatWidget Component
+ * Single Responsibility: Orchestrate widget state and render appropriate screens
+ * All async operations use TanStack Query
+ */
 export function ChatWidget() {
-  const [isOpen, setIsOpen] = useState(false);
-  const { initialize, initialized, error } = useSessionStore();
-  const { activeChatId, loadChats } = useChatStore();
+  useWidgetInitialization();
+  const { isOpen, widgetState, setWidgetState, handleOpen, handleClose } = useWidgetState();
+  
+  const [isInitializing, setIsInitializing] = useState(false);
+  const { initialized, error, visitorId, initVisitor } = useSessionStore();
+  const { activeChatId, selectChat } = useChatStore();
+  const createSessionMutation = useCreateSessionMutation();
+  const { data: chats = [] } = useChatsQuery(visitorId);
 
-  useEffect(() => {
-    if (!initialized && !error) {
-      initialize().then(() => {
-        // Load all chats for this user
-        loadChats();
-      });
+  const handleStartChat = async () => {
+    setIsInitializing(true);
+    try {
+      let currentVisitorId = visitorId;
+      if (!currentVisitorId) {
+        currentVisitorId = await initVisitor();
+      }
+
+      const session = await createSessionMutation.mutateAsync();
+      
+      // Create temp chat ID for immediate UI feedback
+      const tempChatId = `temp_new_chat_${Date.now()}`;
+      selectChat(tempChatId);
+
+      // Update to real session ID
+      selectChat(session.id);
+      setWidgetState("chat");
+    } catch (error) {
+      console.error("Failed to initialize chat:", error);
+    } finally {
+      setIsInitializing(false);
     }
-  }, [initialize, initialized, error, loadChats]);
-
-  // Keep widget open if there's an active chat, even if loadChats() runs
-  // This prevents the widget from closing when session is created
-  useEffect(() => {
-    if (activeChatId && !isOpen) {
-      // If we have an active chat but widget is closed, keep it open
-      // This can happen when session is created and loadChats() runs
-      setIsOpen(true);
-    }
-  }, [activeChatId, isOpen]);
-
-  const handleClose = () => {
-    setIsOpen(false);
   };
 
   const handleBackToList = () => {
-    useChatStore.getState().selectChat(null);
+    selectChat(null);
+    if (chats.length > 0) {
+      setWidgetState("chat-list");
+    } else {
+      setWidgetState("start");
+    }
   };
 
-  // Show error state if initialization failed
+  const handleSelectChat = (chatId: string) => {
+    selectChat(chatId);
+    setWidgetState("chat");
+  };
+
+  const handleNewChat = () => {
+    handleStartChat();
+  };
+
+  const handleOpenWithState = () => {
+    handleOpen();
+    if (activeChatId) {
+      setWidgetState("chat");
+    } else if (chats.length > 0) {
+      setWidgetState("chat-list");
+    } else {
+      setWidgetState("start");
+    }
+  };
+
   if (error) {
     return (
       <div className="fixed bottom-4 right-4 z-50 p-4 bg-red-50 border border-red-200 rounded-lg shadow-lg max-w-sm">
-        <p className="text-sm text-red-800">
-          Failed to initialize chat widget: {error}
-        </p>
+        <p className="text-sm text-red-800">Failed to initialize chat widget: {error}</p>
       </div>
     );
   }
 
-  // Don't show widget until initialized
   if (!initialized) {
-    // Show loading indicator while initializing
     return (
       <div className="fixed bottom-4 right-4 z-50">
         <div className="bg-card border rounded-lg shadow-lg p-3 animate-pulse">
@@ -66,12 +101,14 @@ export function ChatWidget() {
 
   return (
     <>
-      <ChatButton onClick={() => setIsOpen(true)} />
+      <ChatButton onClick={handleOpenWithState} />
       <FloatingPanel isOpen={isOpen} onClose={handleClose}>
-        {activeChatId ? (
+        {widgetState === "start" && <StartScreen onStartChat={handleStartChat} isLoading={isInitializing} />}
+        {widgetState === "chat-list" && (
+          <ChatList onClose={handleClose} onSelectChat={handleSelectChat} onNewChat={handleNewChat} />
+        )}
+        {widgetState === "chat" && activeChatId && (
           <ChatScreen chatId={activeChatId} onBack={handleBackToList} onClose={handleClose} />
-        ) : (
-          <ChatList onClose={handleClose} />
         )}
       </FloatingPanel>
     </>

@@ -10,8 +10,10 @@ interface SessionStore extends SessionType {
   widgetConfig: any | null;
   error: string | null;
   visitorId: string | null;
+  conversationType: "sales" | "support" | "knowledge" | null;
   loadUserSessions: () => Promise<ApiSession[]>;
   initVisitor: () => Promise<string>;
+  setConversationType: (type: "sales" | "support" | "knowledge") => void;
 }
 
 export const useSessionStore = create<SessionStore>((set, get) => ({
@@ -21,6 +23,10 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
   widgetConfig: null,
   error: null,
   visitorId: null,
+  conversationType: null,
+  setConversationType: (type: "sales" | "support" | "knowledge") => {
+    set({ conversationType: type });
+  },
   initVisitor: async (): Promise<string> => {
     // Check localStorage for existing visitor_id
     let visitorId = localStorage.getItem(VISITOR_ID_KEY);

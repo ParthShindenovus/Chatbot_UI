@@ -1,7 +1,6 @@
 import { Button } from "@/components/ui/button";
 import { MessageCircle } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
-import { useChatStore } from "../store/chatStore";
 import { cn } from "@/lib/utils";
 
 interface ChatButtonProps {
@@ -10,8 +9,8 @@ interface ChatButtonProps {
 }
 
 export function ChatButton({ onClick, className }: ChatButtonProps) {
-  const { chats } = useChatStore();
-  const totalUnread = chats.reduce((sum, chat) => sum + chat.unreadCount, 0);
+  // TODO: Calculate unread count from messages when Session type includes unreadCount
+  const totalUnread = 0;
 
   return (
     <Button

@@ -52,8 +52,9 @@ const server = http.createServer((req, res) => {
   // Check if it's widget-loader.js (serve from public folder)
   if (filePath === '/widget-loader.js') {
     const loaderPath = path.join(PUBLIC_DIR, 'widget-loader.js');
-    fs.access(loaderPath, fs.constants.F_OK, (err) => {
-      if (err) {
+    try {
+      // Check synchronously if file exists
+      if (!fs.existsSync(loaderPath)) {
         console.error(`❌ widget-loader.js not found at: ${loaderPath}`);
         res.writeHead(404, { 
           'Content-Type': 'text/plain; charset=utf-8',
@@ -61,22 +62,19 @@ const server = http.createServer((req, res) => {
         res.end('widget-loader.js not found');
         return;
       }
-      fs.readFile(loaderPath, (err, data) => {
-        if (err) {
-          console.error(`❌ Error reading widget-loader.js:`, err);
-          res.writeHead(500, { 
-            'Content-Type': 'text/plain; charset=utf-8',
-          });
-          res.end('Error reading widget-loader.js');
-          return;
-        }
-        console.log(`✅ Serving widget-loader.js (${data.length} bytes)`);
-        res.writeHead(200, { 
-          'Content-Type': 'application/javascript; charset=utf-8',
-        });
-        res.end(data);
+      const data = fs.readFileSync(loaderPath);
+      console.log(`✅ Serving widget-loader.js (${data.length} bytes)`);
+      res.writeHead(200, { 
+        'Content-Type': 'application/javascript; charset=utf-8',
       });
-    });
+      res.end(data);
+    } catch (err) {
+      console.error(`❌ Error with widget-loader.js:`, err);
+      res.writeHead(500, { 
+        'Content-Type': 'text/plain; charset=utf-8',
+      });
+      res.end('Error reading widget-loader.js');
+    }
     return;
   }
 

@@ -49,6 +49,17 @@ export interface ChatResponse {
   session_id: string;
   message_id: string;
   response_id: string;
+  conversation_type?: "sales" | "support" | "knowledge";
+  conversation_data?: {
+    step?: string;
+    name?: string | null;
+    email?: string | null;
+    phone?: string | null;
+    issue?: string | null;
+  };
+  complete?: boolean;
+  needs_info?: "name" | "email" | "phone" | "issue" | null;
+  suggestions?: string[];
 }
 
 export interface MessagesResponse {
@@ -252,5 +263,27 @@ export const getChatHistory = async (
   );
 
   return { messages: sortedMessages, hasMore, total };
+};
+
+export interface SuggestionsResponse {
+  suggestions: string[];
+  session_id: string;
+  message_count: number;
+}
+
+export const getSuggestions = async (
+  sessionId: string,
+  visitorId?: string
+): Promise<SuggestionsResponse> => {
+  const params = new URLSearchParams({ session_id: sessionId });
+  if (visitorId) params.append("visitor_id", visitorId);
+
+  const response = await axios.get<ApiResponse<SuggestionsResponse>>(
+    `/api/chats/messages/suggestions/?${params.toString()}`
+  );
+  if (!response.data.success) {
+    throw new Error(response.data.message || "Failed to get suggestions");
+  }
+  return response.data.data;
 };
 

@@ -128,6 +128,15 @@
   background-image: none !important;
 }
 
+/* Override background reset for bounce typing dots - Must come after global reset */
+#chat-widget-container .widget-typing-dot-bounce,
+.chat-widget-isolated .widget-typing-dot-bounce,
+.chat-widget-wrapper .widget-typing-dot-bounce {
+  background-color: var(--widget-muted-text) !important;
+  background: var(--widget-muted-text) !important;
+  background-image: none !important;
+}
+
 /* Ensure typing indicator container is visible */
 #chat-widget-container .widget-typing-indicator,
 .chat-widget-isolated .widget-typing-indicator,
@@ -738,6 +747,19 @@
   padding: 0.25rem 0 !important;
 }
 
+#chat-widget-container .widget-typing-dots-bounce,
+.chat-widget-isolated .widget-typing-dots-bounce,
+.chat-widget-wrapper .widget-typing-dots-bounce {
+  display: flex !important;
+  gap: 0.25rem !important;
+  align-items: center !important;
+  padding: 0.25rem 0 !important;
+  min-height: 0.5rem !important;
+  width: 100% !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+}
+
 #chat-widget-container .widget-typing-dot,
 .chat-widget-isolated .widget-typing-dot,
 .chat-widget-wrapper .widget-typing-dot {
@@ -752,6 +774,23 @@
   animation: widget-loading-fade 1s infinite !important;
   flex-shrink: 0 !important;
   visibility: visible !important;
+}
+
+#chat-widget-container .widget-typing-dot-bounce,
+.chat-widget-isolated .widget-typing-dot-bounce,
+.chat-widget-wrapper .widget-typing-dot-bounce {
+  display: inline-block !important;
+  width: 0.5rem !important;
+  height: 0.5rem !important;
+  background-color: var(--widget-muted-text) !important;
+  background: var(--widget-muted-text) !important;
+  border-radius: 50% !important;
+  animation: widget-bounce 1.4s ease-in-out infinite !important;
+  flex-shrink: 0 !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+  min-width: 0.5rem !important;
+  min-height: 0.5rem !important;
 }
 
 #chat-widget-container .widget-typing-dot:nth-child(1),
@@ -770,6 +809,24 @@
 .chat-widget-isolated .widget-typing-dot:nth-child(3),
 .chat-widget-wrapper .widget-typing-dot:nth-child(3) {
   animation-delay: 0.4s !important;
+}
+
+#chat-widget-container .widget-typing-dot-bounce:nth-child(1),
+.chat-widget-isolated .widget-typing-dot-bounce:nth-child(1),
+.chat-widget-wrapper .widget-typing-dot-bounce:nth-child(1) {
+  animation-delay: 0ms !important;
+}
+
+#chat-widget-container .widget-typing-dot-bounce:nth-child(2),
+.chat-widget-isolated .widget-typing-dot-bounce:nth-child(2),
+.chat-widget-wrapper .widget-typing-dot-bounce:nth-child(2) {
+  animation-delay: 150ms !important;
+}
+
+#chat-widget-container .widget-typing-dot-bounce:nth-child(3),
+.chat-widget-isolated .widget-typing-dot-bounce:nth-child(3),
+.chat-widget-wrapper .widget-typing-dot-bounce:nth-child(3) {
+  animation-delay: 300ms !important;
 }
 
 #chat-widget-container .widget-typing-text,
@@ -1351,5 +1408,14 @@
   }
   50% {
     opacity: 0.5;
+  }
+}
+
+@keyframes widget-bounce {
+  0%, 100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-0.25rem);
   }
 }

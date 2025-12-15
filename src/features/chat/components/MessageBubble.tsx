@@ -9,7 +9,7 @@ interface MessageBubbleProps {
 
 export function MessageBubble({ message, isStreaming = false }: MessageBubbleProps) {
   const isUser = message.role === "user";
-  const isTypingIndicator = message.id === "typing-indicator" && !message.content;
+  const isTypingIndicator = message.id === "typing-indicator" && (!message.content || message.content === "");
 
   return (
     <div
@@ -28,8 +28,10 @@ export function MessageBubble({ message, isStreaming = false }: MessageBubblePro
           className={`widget-message-bubble widget-message-bubble-assistant`}
         >
           {isTypingIndicator ? (
-            <div className="flex items-center gap-1 py-1">
-              <span className="text-xs ml-2 opacity-70">AI is typing...</span>
+            <div className="widget-typing-dots-bounce">
+              <div className="widget-typing-dot-bounce" />
+              <div className="widget-typing-dot-bounce" />
+              <div className="widget-typing-dot-bounce" />
             </div>
           ) : (
             <>

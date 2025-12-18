@@ -128,7 +128,7 @@ export function MessageRenderer({ content, isUser = false }: MessageRendererProp
               rel="noopener noreferrer"
               style={{
                 textDecoration: 'underline',
-                color: isUser ? '#ffffff' : 'var(--widget-primary)',
+                color: isUser ? '#bfdbfe' : '#2563eb', // blue for links (lighter on user bubbles)
                 wordBreak: 'break-word',
               }}
               onMouseEnter={(e) => {

@@ -172,8 +172,8 @@ export function ChatList({ onClose, onSelectChat }: ChatListProps) {
           <Loader2 className="widget-loader-spinner" />
         </div>
       ) : chats.length === 0 ? (
-        <div className="widget-flex widget-flex-col widget-items-center widget-justify-center" style={{ flex: 1, padding: '1.5rem', textAlign: 'center', minHeight: 0 }}>
-          <p className="widget-text-sm widget-text-muted" style={{ marginBottom: '1rem', padding: '0 1rem' }}>No chats yet. Start a new conversation!</p>
+        <div className="widget-flex widget-flex-col widget-items-center widget-gap-2 widget-justify-center" style={{ flex: 1, padding: '1.5rem', textAlign: 'center', minHeight: 0 }}>
+          <p className="widget-text-sm widget-text-muted">No chats yet. Start a new conversation!</p>
           <Button onClick={handleCreateChat} size="sm" disabled={isCreatingChat}>
             {isCreatingChat ? (
               <>

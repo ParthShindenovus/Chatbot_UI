@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient, useInfiniteQuery } from "@tanstack/react-query";
-import { getChatHistory, sendMessage, createSession, getSuggestions, listSessions } from "./api";
+import { getChatHistory, sendMessage, createSession, getSuggestions, listSessions, type Session } from "./api";
 import { useSessionStore } from "./store/sessionStore";
 import type { Message as ApiMessage } from "./api";
 import type { Message } from "./types";
@@ -12,6 +12,7 @@ const convertApiMessage = (apiMsg: ApiMessage, sessionId: string): Message => ({
   role: apiMsg.role,
   timestamp: new Date(apiMsg.timestamp),
   isRead: apiMsg.role === "user",
+  metadata: apiMsg.metadata, // Preserve metadata to identify idle_warning and session_end
 });
 
 // Query Keys
@@ -28,6 +29,8 @@ export const chatKeys = {
  * Single Responsibility: Fetch and cache messages for a chat session
  */
 export function useMessagesQuery(sessionId: string | null, enabled: boolean = true) {
+  const queryClient = useQueryClient();
+  
   return useQuery({
     queryKey: sessionId ? chatKeys.messages(sessionId) : ["messages", "null"],
     queryFn: async () => {
@@ -38,13 +41,27 @@ export function useMessagesQuery(sessionId: string | null, enabled: boolean = tr
       const convertedMessages = apiMessages
         .map((msg) => convertApiMessage(msg, sessionId))
         .sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
+      
+      // Check if any message is session_end and mark conversation as complete
+      const hasSessionEnd = convertedMessages.some(
+        (msg) => msg.metadata?.type === "session_end"
+      );
+      
+      if (hasSessionEnd) {
+        queryClient.setQueryData([...chatKeys.messages(sessionId), "state"], {
+          needsInfo: null,
+          isComplete: true,
+          suggestions: [],
+        });
+      }
+      
       return { messages: convertedMessages, hasMore, total };
     },
     enabled: enabled && !!sessionId && !sessionId.startsWith("temp_new_chat_"),
-    staleTime: 1000 * 60 * 5, // 5 minutes - messages are fresh for longer
+    staleTime: 0, // Always consider stale - refetch on mount
     gcTime: 1000 * 60 * 10, // 10 minutes - keep in cache
     refetchOnWindowFocus: false,
-    refetchOnMount: false, // Don't refetch on mount if data exists
+    refetchOnMount: true, // Always refetch when entering chat to get latest messages
     refetchOnReconnect: false,
   });
 }
@@ -295,13 +312,15 @@ export function useChatsInfiniteQuery(visitorId: string | null) {
       const lastPageSize = lastPage.sessions.length;
       return (lastPageParam as number) + lastPageSize;
     },
-    staleTime: 1000 * 60 * 2, // 2 minutes
+    staleTime: 0, // Always consider stale - refetch on mount
     refetchOnWindowFocus: false,
+    refetchOnMount: true, // Always refetch when component mounts
   });
 }
 
 /**
  * Mutation hook for creating a session
+ * Only adds session to chat list after successful creation (no optimistic updates)
  */
 export function useCreateSessionMutation() {
   const queryClient = useQueryClient();
@@ -314,8 +333,53 @@ export function useCreateSessionMutation() {
       }
       return await createSession(visitorId);
     },
-    onSuccess: (_session) => {
-      // Invalidate chats list (both regular and infinite) to show new session
+    onMutate: async () => {
+      if (!visitorId) return;
+
+      // Cancel ongoing refetches to prevent race conditions
+      await queryClient.cancelQueries({ queryKey: [...chatKeys.list(visitorId), "infinite"] });
+    },
+    onError: (_err) => {
+      // No rollback needed since we don't optimistically update
+      // Session creation failed, so it won't appear in the list
+    },
+    onSuccess: (session) => {
+      // Only add session to chat list after successful creation
+      if (visitorId) {
+        queryClient.setQueryData<{
+          pages: Array<{ sessions: Session[]; hasMore: boolean; total: number }>;
+          pageParams: number[];
+        }>([...chatKeys.list(visitorId), "infinite"], (old) => {
+          if (!old) {
+            // If no existing data, create new structure with the session
+            return {
+              pages: [{ sessions: [session], hasMore: false, total: 1 }],
+              pageParams: [0],
+            };
+          }
+          // Add new session to the beginning of the first page
+          const firstPage = old.pages[0] || { sessions: [], hasMore: false, total: 0 };
+          // Check if session already exists (avoid duplicates)
+          const sessionExists = firstPage.sessions.some((s) => s.id === session.id);
+          if (sessionExists) {
+            return old;
+          }
+          return {
+            ...old,
+            pages: [
+              {
+                ...firstPage,
+                sessions: [session, ...firstPage.sessions],
+                total: (firstPage.total || 0) + 1,
+              },
+              ...old.pages.slice(1),
+            ],
+          };
+        });
+      }
+    },
+    onSettled: () => {
+      // Invalidate to ensure sync with server after mutation completes
       if (visitorId) {
         queryClient.invalidateQueries({ queryKey: chatKeys.list(visitorId) });
       }
@@ -325,6 +389,7 @@ export function useCreateSessionMutation() {
 
 /**
  * Query hook for fetching suggestions
+ * Only fetches if session is active (is_active: true)
  */
 export function useSuggestionsQuery(sessionId: string | null, enabled: boolean = true) {
   const { visitorId } = useSessionStore();
@@ -335,6 +400,26 @@ export function useSuggestionsQuery(sessionId: string | null, enabled: boolean =
     queryFn: async () => {
       if (!sessionId || !visitorId || sessionId.startsWith("temp_new_chat_")) {
         return { suggestions: [], session_id: sessionId || "", message_count: 0 };
+      }
+      
+      // Check if session is active from sessions cache
+      const sessionsData = queryClient.getQueryData<{
+        pages: Array<{ sessions: Array<{ id: string; is_active: boolean }> }>;
+      }>([...chatKeys.list(visitorId), "infinite"]);
+      
+      // Find session in all pages
+      let isSessionActive = true; // Default to true if not found in cache
+      if (sessionsData?.pages) {
+        const allSessions = sessionsData.pages.flatMap((page) => page.sessions);
+        const session = allSessions.find((s) => s.id === sessionId);
+        if (session) {
+          isSessionActive = session.is_active;
+        }
+      }
+      
+      // Don't call API if session is not active
+      if (!isSessionActive) {
+        return { suggestions: [], session_id: sessionId, message_count: 0 };
       }
       
       // Check if suggestions are in conversation state cache
@@ -375,5 +460,49 @@ export function useConversationState(sessionId: string | null) {
   }>([...chatKeys.messages(sessionId), "state"]);
 
   return state || { needsInfo: null, isComplete: false, suggestions: [] };
+}
+
+/**
+ * Hook to get session data (including is_active) reactively
+ * Uses useQuery to ensure reactivity when cache updates
+ */
+export function useSessionData(sessionId: string | null) {
+  const { visitorId } = useSessionStore();
+  const queryClient = useQueryClient();
+
+  interface SessionItem {
+    id: string;
+    is_active: boolean;
+  }
+
+  interface SessionsPage {
+    sessions: SessionItem[];
+  }
+
+  interface SessionsCacheData {
+    pages: SessionsPage[];
+  }
+
+  // Use useQuery to subscribe to cache changes
+  const sessionsQuery = useQuery<SessionsCacheData | undefined>({
+    queryKey: visitorId ? [...chatKeys.list(visitorId), "infinite"] : ["sessions", "null"],
+    queryFn: (): SessionsCacheData | undefined => {
+      // This won't actually fetch - we're just subscribing to cache
+      if (!visitorId) return undefined;
+      const queryKey = [...chatKeys.list(visitorId), "infinite"];
+      return queryClient.getQueryData<SessionsCacheData>(queryKey);
+    },
+    enabled: !!visitorId && !!sessionId && !sessionId.startsWith("temp_new_chat_"),
+    staleTime: Infinity, // Never stale - we're just reading from cache
+    gcTime: Infinity,
+  });
+
+  const allSessions: SessionItem[] = sessionsQuery.data?.pages?.flatMap((page: SessionsPage) => page.sessions) || [];
+  const currentSession = allSessions.find((s: SessionItem) => s.id === sessionId);
+  
+  return {
+    isActive: currentSession?.is_active ?? true,
+    session: currentSession,
+  };
 }
 

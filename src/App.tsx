@@ -19,19 +19,6 @@ function App() {
             This is a demo page for the embedded chat widget. The chat button
             should appear in the bottom right corner.
           </p>
-          <div className="space-y-4">
-            <div className="p-6 border rounded-lg">
-              <h2 className="text-xl font-semibold mb-2">Features</h2>
-              <ul className="list-disc list-inside space-y-1 text-muted-foreground">
-                <li>Floating chat button with unread badge</li>
-                <li>Chat list with unread indicators</li>
-                <li>Message rendering with markdown support</li>
-                <li>Infinite scroll for message history</li>
-                <li>Smooth animations and transitions</li>
-                <li>Mock data - ready for API integration</li>
-              </ul>
-            </div>
-          </div>
         </div>
       </div>
     </QueryClientProvider>

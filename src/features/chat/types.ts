@@ -5,6 +5,7 @@ export interface Message {
   role: "user" | "assistant";
   timestamp: Date;
   isRead: boolean;
+  metadata?: Record<string, any>; // For metadata like type: "idle_warning" or "session_end"
 }
 
 export interface ChatSummary {

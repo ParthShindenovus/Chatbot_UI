@@ -10,6 +10,9 @@ interface MessageBubbleProps {
 export function MessageBubble({ message, isStreaming = false }: MessageBubbleProps) {
   const isUser = message.role === "user";
   const isTypingIndicator = message.id === "typing-indicator" && (!message.content || message.content === "");
+  
+  // idle_warning and session_end messages are displayed as normal assistant messages
+  // They are identified by metadata.type but rendered with markdown like regular messages
 
   return (
     <div
@@ -37,14 +40,18 @@ export function MessageBubble({ message, isStreaming = false }: MessageBubblePro
             <>
               <MessageRenderer content={message.content} isUser={isUser} />
               {isStreaming && (
-                <span style={{ 
-                  display: 'inline-block', 
-                  width: '0.5rem', 
-                  height: '1rem', 
-                  marginLeft: '0.25rem',
-                  background: 'currentColor',
-                  animation: 'widget-pulse 1s ease-in-out infinite'
-                }} />
+                <span 
+                  className="widget-streaming-cursor"
+                  style={{ 
+                    display: 'inline-block', 
+                    width: '2px', 
+                    height: '1rem', 
+                    marginLeft: '0.25rem',
+                    background: 'currentColor',
+                    verticalAlign: 'middle',
+                    animation: 'widget-blink 1s ease-in-out infinite'
+                  }} 
+                />
               )}
             </>
           )}

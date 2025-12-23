@@ -8,6 +8,134 @@ import { chatKeys } from "../../useQueries";
 import type { Message } from "../../types";
 import type { Session } from "../../api";
 
+// Use public folder path - more reliable for audio files
+const notificationSound = "/notification.mp3";
+
+// Track played notifications per response to ensure it only plays once
+const playedNotifications = new Set<string>();
+
+// Preload audio to avoid loading delays
+let audioElement: HTMLAudioElement | null = null;
+
+/**
+ * Initialize audio element (call once on module load)
+ */
+function initAudio() {
+  if (audioElement) return audioElement;
+  
+  try {
+    audioElement = new Audio(notificationSound);
+    audioElement.volume = 0.5; // Set volume to 50%
+    audioElement.preload = "auto";
+    
+    // Try to load the audio (load() returns void, so we just call it)
+    try {
+      audioElement.load();
+    } catch (error) {
+      // Silently handle load errors
+    }
+    
+    return audioElement;
+  } catch (error) {
+    return null;
+  }
+}
+
+// Initialize audio on module load
+if (typeof window !== "undefined") {
+  initAudio();
+}
+
+/**
+ * Helper function to actually play the audio
+ */
+function playAudio(audio: HTMLAudioElement, responseId: string) {
+  const playPromise = audio.play();
+  
+  if (playPromise !== undefined) {
+    playPromise
+      .then(() => {
+        // Mark as played only on success
+        playedNotifications.add(responseId);
+      })
+      .catch(() => {
+        // Silently handle play errors - don't mark as played so we can retry
+      });
+  } else {
+    // Fallback for older browsers
+    playedNotifications.add(responseId);
+  }
+}
+
+/**
+ * Check if page is visible to the user
+ */
+function isPageVisible(): boolean {
+  if (typeof document === "undefined") return false;
+  
+  // Check Page Visibility API
+  if (typeof document.hidden !== "undefined") {
+    return !document.hidden;
+  }
+  
+  // Fallback for older browsers
+  if (typeof document.visibilityState !== "undefined") {
+    return document.visibilityState === "visible";
+  }
+  
+  // If API not available, assume page is visible
+  return true;
+}
+
+/**
+ * Play notification sound once per response
+ */
+function playNotificationSound(responseId: string) {
+  // Only play if we haven't played for this response yet
+  if (playedNotifications.has(responseId)) {
+    return;
+  }
+
+  // Only play sound if page is hidden (user is on another tab/window or browser is minimized)
+  const pageVisible = isPageVisible();
+  if (pageVisible) {
+    // Still mark as played to prevent playing when user switches tabs later
+    playedNotifications.add(responseId);
+    return;
+  }
+
+  try {
+    // Ensure audio is initialized
+    const audio = audioElement || initAudio();
+    if (!audio) {
+      return;
+    }
+
+    // Check if audio is ready
+    if (audio.readyState < 2) {
+      audio.addEventListener("canplay", () => {
+        audio.currentTime = 0;
+        playAudio(audio, responseId);
+      }, { once: true });
+      return;
+    }
+    
+    // Reset audio to beginning and play
+    audio.currentTime = 0;
+    playAudio(audio, responseId);
+    
+    // Clean up old entries to prevent memory leak (keep last 100)
+    if (playedNotifications.size > 100) {
+      const firstEntry = playedNotifications.values().next().value;
+      if (firstEntry !== undefined) {
+        playedNotifications.delete(firstEntry);
+      }
+    }
+  } catch (error) {
+    // Silently handle errors
+  }
+}
+
 /**
  * Helper function to update session in sessions cache with last_message and last_message_at
  * Exported so it can be used from ChatScreen when user sends messages
@@ -212,6 +340,12 @@ export function updateCompleteMessage(
       session_id: sessionId,
       message_count: 0,
     });
+  }
+  
+  // Play notification sound when response and recommendations are received
+  // Play for all complete responses (responseId indicates a complete response was received)
+  if (responseId) {
+    playNotificationSound(responseId);
   }
 
   // Update session in sessions list cache with last_message

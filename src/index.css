@@ -119,6 +119,70 @@
   vertical-align: baseline !important;
 }
 
+/* Restore natural list behavior after global reset - Must come after global reset */
+#chat-widget-container ul,
+#chat-widget-container ol,
+.chat-widget-isolated ul,
+.chat-widget-isolated ol,
+.chat-widget-wrapper ul,
+.chat-widget-wrapper ol {
+  padding-left: 1.5em !important;
+  margin-top: 0.2em !important;
+  margin-bottom: 0.2em !important;
+  list-style-position: outside !important;
+}
+
+#chat-widget-container ul ul,
+#chat-widget-container ol ol,
+#chat-widget-container ul ol,
+#chat-widget-container ol ul,
+.chat-widget-isolated ul ul,
+.chat-widget-isolated ol ol,
+.chat-widget-isolated ul ol,
+.chat-widget-isolated ol ul,
+.chat-widget-wrapper ul ul,
+.chat-widget-wrapper ol ol,
+.chat-widget-wrapper ul ol,
+.chat-widget-wrapper ol ul {
+  margin-top: 0.2em !important;
+  margin-bottom: 0.2em !important;
+}
+
+#chat-widget-container li,
+.chat-widget-isolated li,
+.chat-widget-wrapper li {
+  margin-top: 0.2em !important;
+  margin-bottom: 0.2em !important;
+}
+
+/* Preserve line breaks in markdown content - Must come after global reset */
+/* remark-breaks plugin converts \n to <br> tags, so we ensure br tags are visible */
+#chat-widget-container br,
+.chat-widget-isolated br,
+.chat-widget-wrapper br {
+  display: block !important;
+  content: "" !important;
+  margin-bottom: 0.2em !important;
+  line-height: 1.6 !important;
+}
+
+/* Ensure paragraphs handle line breaks and word wrapping properly */
+#chat-widget-container p,
+.chat-widget-isolated p,
+.chat-widget-wrapper p {
+  margin-top: 0 !important;
+  margin-bottom: 0.2em !important;
+  word-wrap: break-word !important;
+  overflow-wrap: break-word !important;
+}
+
+/* Last paragraph in a container should not have bottom margin */
+#chat-widget-container p:last-child,
+.chat-widget-isolated p:last-child,
+.chat-widget-wrapper p:last-child {
+  margin-bottom: 0 !important;
+}
+
 /* Override background reset for typing dots - Must come after global reset */
 #chat-widget-container .widget-typing-dot,
 .chat-widget-isolated .widget-typing-dot,

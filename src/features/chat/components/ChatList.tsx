@@ -17,7 +17,7 @@ interface ChatListProps {
 // Convert session to chat summary for display
 const sessionToChatSummary = (session: Session) => ({
   id: session.id,
-  title: "Alex AI", // Fixed name for all chats
+  title: "Whip-E AI", // Fixed name for all chats
   lastMessage: session.last_message || "",
   lastMessageTime: session.last_message_at ? new Date(session.last_message_at) : new Date(session.created_at),
   unreadCount: 0,

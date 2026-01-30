@@ -9,59 +9,163 @@ import type { Message } from "../../types";
 import type { Session } from "../../api";
 
 // Use public folder path - more reliable for audio files
-const notificationSound = "/notification.mp3";
+const notificationSound = "https://chatbot.commedia.au/notification.mp3";
 
 // Track played notifications per response to ensure it only plays once
 const playedNotifications = new Set<string>();
 
 // Preload audio to avoid loading delays
 let audioElement: HTMLAudioElement | null = null;
+// Track if audio has been unlocked (required for browser autoplay policy)
+let audioUnlocked = false;
+
+/**
+ * Unlock audio for playback (required by browser autoplay policies)
+ * Should be called on first user interaction
+ */
+function unlockAudio() {
+  if (audioUnlocked || !audioElement) return;
+  
+  try {
+    // Try to play and immediately pause to unlock audio
+    const playPromise = audioElement.play();
+    if (playPromise !== undefined) {
+      playPromise
+        .then(() => {
+          console.log("[Audio] Audio unlocked successfully");
+          audioElement?.pause();
+          audioElement && (audioElement.currentTime = 0);
+          audioUnlocked = true;
+        })
+        .catch((error) => {
+          console.log("[Audio] Audio unlock attempt (will retry on next interaction):", error);
+        });
+    }
+  } catch (error) {
+    console.log("[Audio] Error unlocking audio:", error);
+  }
+}
+
+// Unlock audio on first user interaction
+if (typeof window !== "undefined") {
+  const unlockEvents = ["click", "touchstart", "keydown"];
+  const handleUnlock = () => {
+    unlockAudio();
+    unlockEvents.forEach(event => {
+      window.removeEventListener(event, handleUnlock);
+    });
+  };
+  
+  unlockEvents.forEach(event => {
+    window.addEventListener(event, handleUnlock, { once: true, passive: true });
+  });
+}
 
 /**
  * Initialize audio element (call once on module load)
  */
 function initAudio() {
-  if (audioElement) return audioElement;
+  if (audioElement) {
+    console.log("[Audio] Audio element already initialized");
+    return audioElement;
+  }
   
   try {
+    console.log(`[Audio] Initializing audio element with path: ${notificationSound}`);
     audioElement = new Audio(notificationSound);
     audioElement.volume = 0.5; // Set volume to 50%
     audioElement.preload = "auto";
     
+    // Add event listeners for debugging
+    audioElement.addEventListener("loadstart", () => {
+      console.log("[Audio] loadstart event fired");
+    });
+    audioElement.addEventListener("canplay", () => {
+      console.log("[Audio] canplay event fired, readyState:", audioElement?.readyState);
+    });
+    audioElement.addEventListener("error", (e) => {
+      console.error("[Audio] Error loading audio:", e);
+      console.error("[Audio] Audio error details:", audioElement?.error);
+    });
+    audioElement.addEventListener("play", () => {
+      console.log("[Audio] play event fired");
+    });
+    audioElement.addEventListener("ended", () => {
+      console.log("[Audio] ended event fired");
+    });
+    
     // Try to load the audio (load() returns void, so we just call it)
     try {
       audioElement.load();
+      console.log("[Audio] Audio load() called, readyState:", audioElement.readyState);
     } catch (error) {
-      // Silently handle load errors
+      console.error("[Audio] Error calling load():", error);
     }
     
     return audioElement;
   } catch (error) {
+    console.error("[Audio] Error creating audio element:", error);
     return null;
   }
 }
 
 // Initialize audio on module load
 if (typeof window !== "undefined") {
+  console.log("[Audio] Module loaded, initializing audio");
   initAudio();
+} else {
+  console.log("[Audio] Module loaded but window is undefined (SSR), skipping audio initialization");
 }
 
 /**
  * Helper function to actually play the audio
  */
 function playAudio(audio: HTMLAudioElement, responseId: string) {
+  console.log(`[Audio] playAudio called for responseId: ${responseId}`);
+  console.log(`[Audio] Audio readyState: ${audio.readyState} (0=HAVE_NOTHING, 1=HAVE_METADATA, 2=HAVE_CURRENT_DATA, 3=HAVE_FUTURE_DATA, 4=HAVE_ENOUGH_DATA)`);
+  console.log(`[Audio] Audio src: ${audio.src}`);
+  console.log(`[Audio] Audio volume: ${audio.volume}`);
+  console.log(`[Audio] Audio currentTime: ${audio.currentTime}`);
+  console.log(`[Audio] Audio paused: ${audio.paused}`);
+  
+  // Pause any ongoing playback and reset to beginning
+  try {
+    if (!audio.paused) {
+      console.log("[Audio] Audio is currently playing, pausing it first");
+      audio.pause();
+    }
+    audio.currentTime = 0;
+    console.log("[Audio] Reset audio to beginning");
+  } catch (error) {
+    console.error("[Audio] Error resetting audio:", error);
+  }
+  
   const playPromise = audio.play();
   
   if (playPromise !== undefined) {
+    console.log("[Audio] play() returned a promise");
     playPromise
       .then(() => {
+        console.log(`[Audio] Audio playback started successfully for responseId: ${responseId}`);
         // Mark as played only on success
         playedNotifications.add(responseId);
       })
-      .catch(() => {
+      .catch((error) => {
+        console.error(`[Audio] Audio playback failed for responseId: ${responseId}`, error);
+        console.error(`[Audio] Error name: ${error.name}, message: ${error.message}`);
+        
+        // Check for common autoplay policy errors
+        if (error.name === "NotAllowedError" || error.name === "NotSupportedError") {
+          console.warn(`[Audio] Autoplay prevented by browser. Audio may need user interaction to unlock.`);
+          console.warn(`[Audio] Try clicking/touching the page first to unlock audio playback.`);
+          // Try to unlock on next attempt
+          audioUnlocked = false;
+        }
+        
         // Silently handle play errors - don't mark as played so we can retry
       });
   } else {
+    console.log("[Audio] play() returned undefined (older browser)");
     // Fallback for older browsers
     playedNotifications.add(responseId);
   }
@@ -91,29 +195,41 @@ function isPageVisible(): boolean {
  * Play notification sound once per response
  */
 function playNotificationSound(responseId: string) {
+  console.log(`[Audio] playNotificationSound called for responseId: ${responseId}`);
+  
   // Only play if we haven't played for this response yet
   if (playedNotifications.has(responseId)) {
+    console.log(`[Audio] Notification already played for responseId: ${responseId}, skipping`);
     return;
   }
 
-  // Only play sound if page is hidden (user is on another tab/window or browser is minimized)
+  // Check page visibility for logging (but allow playing in both cases)
   const pageVisible = isPageVisible();
-  if (pageVisible) {
-    // Still mark as played to prevent playing when user switches tabs later
-    playedNotifications.add(responseId);
-    return;
-  }
+  console.log(`[Audio] Page visibility check: pageVisible=${pageVisible}, document.hidden=${typeof document !== "undefined" ? document.hidden : "N/A"}`);
+  console.log(`[Audio] Attempting to play notification sound (plays regardless of visibility)`);
 
   try {
     // Ensure audio is initialized
     const audio = audioElement || initAudio();
     if (!audio) {
+      console.error("[Audio] Failed to initialize audio element, cannot play notification");
       return;
+    }
+
+    console.log(`[Audio] Audio element exists, readyState: ${audio.readyState}`);
+    console.log(`[Audio] Audio unlocked: ${audioUnlocked}`);
+
+    // Try to unlock audio if not already unlocked (fallback)
+    if (!audioUnlocked) {
+      console.log("[Audio] Audio not unlocked yet, attempting to unlock");
+      unlockAudio();
     }
 
     // Check if audio is ready
     if (audio.readyState < 2) {
+      console.log(`[Audio] Audio not ready yet (readyState=${audio.readyState}), waiting for canplay event`);
       audio.addEventListener("canplay", () => {
+        console.log(`[Audio] canplay event received, attempting to play`);
         audio.currentTime = 0;
         playAudio(audio, responseId);
       }, { once: true });
@@ -121,6 +237,7 @@ function playNotificationSound(responseId: string) {
     }
     
     // Reset audio to beginning and play
+    console.log(`[Audio] Audio is ready, resetting to beginning and playing`);
     audio.currentTime = 0;
     playAudio(audio, responseId);
     
@@ -132,7 +249,7 @@ function playNotificationSound(responseId: string) {
       }
     }
   } catch (error) {
-    // Silently handle errors
+    console.error("[Audio] Error in playNotificationSound:", error);
   }
 }
 
@@ -413,6 +530,11 @@ export function addIdleWarningMessage(
       };
     }
   );
+
+  // Play notification sound for idle warning
+  if (responseId) {
+    playNotificationSound(responseId);
+  }
 }
 
 /**
@@ -550,6 +672,11 @@ export function addSessionEndMessage(
         };
       }
     );
+  }
+
+  // Play notification sound for session end message
+  if (responseId) {
+    playNotificationSound(responseId);
   }
 }
 

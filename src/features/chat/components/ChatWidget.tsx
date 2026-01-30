@@ -1,6 +1,7 @@
 import { ChatButton } from "./ChatButton";
 import { ChatScreen } from "./ChatScreen";
 import { ChatList } from "./ChatList";
+import { Disclaimer } from "./Disclaimer";
 import { FloatingPanel } from "@/shared/components";
 import { useSessionStore } from "../store/sessionStore";
 import { useChatStore } from "../store/chatStore";
@@ -82,12 +83,17 @@ export function ChatWidget() {
     <>
       <ChatButton onClick={handleOpenWithState} />
       <FloatingPanel isOpen={isOpen} onClose={handleClose}>
-        {widgetState === "chat-list" && (
-          <ChatList onClose={handleClose} onSelectChat={handleSelectChat} />
-        )}
-        {widgetState === "chat" && activeChatId && (
-          <ChatScreen chatId={activeChatId} onBack={handleBackToList} onClose={handleClose} />
-        )}
+        <div className="widget-flex widget-flex-col" style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+          <div style={{ flex: 1, minHeight: 0, overflow: 'hidden' }}>
+            {widgetState === "chat-list" && (
+              <ChatList onClose={handleClose} onSelectChat={handleSelectChat} />
+            )}
+            {widgetState === "chat" && activeChatId && (
+              <ChatScreen chatId={activeChatId} onBack={handleBackToList} onClose={handleClose} />
+            )}
+          </div>
+          <Disclaimer />
+        </div>
       </FloatingPanel>
     </>
   );

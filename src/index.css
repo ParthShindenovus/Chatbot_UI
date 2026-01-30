@@ -1511,3 +1511,30 @@
     transform: translateY(-0.25rem);
   }
 }
+
+
+/* ============================================
+   DISCLAIMER
+   ============================================ */
+#chat-widget-container .widget-disclaimer-container,
+.chat-widget-isolated .widget-disclaimer-container,
+.chat-widget-wrapper .widget-disclaimer-container {
+  flex-shrink: 0 !important;
+  border-top: 1px solid var(--widget-border) !important;
+  background: var(--widget-bg) !important;
+  padding: 0.75rem !important;
+  font-size: var(--widget-font-size-xs) !important;
+  font-family: var(--widget-font-family) !important;
+  color: var(--widget-muted-text) !important;
+  text-align: center !important;
+}
+
+#chat-widget-container .widget-disclaimer-text,
+.chat-widget-isolated .widget-disclaimer-text,
+.chat-widget-wrapper .widget-disclaimer-text {
+  margin: 0 !important;
+  padding: 0 !important;
+  line-height: 1.4 !important;
+  word-wrap: break-word !important;
+  overflow-wrap: break-word !important;
+}

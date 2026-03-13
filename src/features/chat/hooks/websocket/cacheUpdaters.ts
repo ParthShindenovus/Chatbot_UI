@@ -308,6 +308,32 @@ export function updateSessionInList(
 }
 
 /**
+ * Update suggestions when WebSocket connects
+ * This handles initial suggestions sent on connection
+ */
+export function updateConnectedSuggestions(
+  queryClient: QueryClient,
+  sessionId: string,
+  suggestions: string[]
+) {
+  // Update conversation state with initial suggestions
+  queryClient.setQueryData([...chatKeys.messages(sessionId), "state"], (old: any) => ({
+    needsInfo: old?.needsInfo || null,
+    isComplete: old?.isComplete || false,
+    suggestions: suggestions,
+  }));
+
+  // Update suggestions cache
+  queryClient.setQueryData(chatKeys.suggestions(sessionId), {
+    suggestions: suggestions,
+    session_id: sessionId,
+    message_count: 0,
+  });
+  
+  console.log(`[WebSocket] Updated suggestions on connect for session ${sessionId}:`, suggestions);
+}
+
+/**
  * Update streaming message in cache
  */
 export function updateStreamingMessage(

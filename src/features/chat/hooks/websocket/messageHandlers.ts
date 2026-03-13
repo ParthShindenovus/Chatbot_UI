@@ -4,7 +4,7 @@
  */
 
 export interface WebSocketMessage {
-  type: "chunk" | "complete" | "error" | "idle_warning" | "session_end";
+  type: "chunk" | "complete" | "error" | "idle_warning" | "session_end" | "connected";
   chunk?: string;
   done?: boolean;
   message_id?: string;
@@ -15,7 +15,7 @@ export interface WebSocketMessage {
   suggestions?: string[];
   error?: string;
   message?: string; // For idle_warning and session_end
-  session_id?: string; // For idle_warning and session_end
+  session_id?: string; // For idle_warning, session_end, and connected
   metadata?: Record<string, any>; // For metadata
 }
 
@@ -34,6 +34,7 @@ export interface MessageHandlerCallbacks {
     needsInfo: string | null;
     suggestions: string[];
   }) => void;
+  onConnected?: (sessionId: string, suggestions: string[], conversationData: Record<string, any>) => void;
   onIdleWarning?: (message: string, sessionId: string, responseId: string) => void;
   onSessionEnd?: (message: string, sessionId: string, responseId: string) => void;
   onError?: (error: Error) => void;
@@ -48,6 +49,16 @@ export function handleWebSocketMessage(
   callbacks: MessageHandlerCallbacks
 ): StreamingState {
   switch (data.type) {
+    case "connected":
+      if (data.session_id) {
+        callbacks.onConnected?.(
+          data.session_id,
+          data.suggestions || [],
+          data.conversation_data || {}
+        );
+      }
+      return streamingState;
+
     case "chunk":
       if (data.chunk) {
         const newContent = streamingState.content + data.chunk;

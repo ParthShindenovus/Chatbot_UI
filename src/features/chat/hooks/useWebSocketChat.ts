@@ -8,7 +8,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useSessionStore } from "../store/sessionStore";
 import { WebSocketConnection } from "./websocket/websocketConnection";
 import { handleWebSocketMessage, type StreamingState } from "./websocket/messageHandlers";
-import { updateStreamingMessage, updateCompleteMessage, addIdleWarningMessage, addSessionEndMessage } from "./websocket/cacheUpdaters";
+import { updateStreamingMessage, updateCompleteMessage, addIdleWarningMessage, addSessionEndMessage, updateConnectedSuggestions } from "./websocket/cacheUpdaters";
 import { getWebSocketUrl } from "./websocket/getWebSocketUrl";
 
 interface UseWebSocketChatOptions {
@@ -102,6 +102,17 @@ export function useWebSocketChat({
         onMessage: (data) => {
           setStreamingState((currentState) => {
             const newState = handleWebSocketMessage(data, currentState, {
+              onConnected: (connectedSessionId, suggestions, conversationData) => {
+                console.log("WebSocket connected event received:", {
+                  sessionId: connectedSessionId,
+                  suggestions,
+                  conversationData,
+                });
+                // Update suggestions cache with initial suggestions from connection
+                if (suggestions && suggestions.length > 0) {
+                  updateConnectedSuggestions(queryClient, sessionId, suggestions);
+                }
+              },
               onChunk: (content, messageId) => {
                 updateStreamingMessage(queryClient, sessionId, messageId || "", content);
               },

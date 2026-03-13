@@ -4,7 +4,6 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { ChatListItem } from "./ChatListItem";
 import { useChatStore } from "../store/chatStore";
 import { useChatsInfiniteQuery, useCreateSessionMutation } from "../useQueries";
-import { useSessionStore } from "../store/sessionStore";
 import { InfiniteScrollContainer } from "@/shared/components";
 import { Plus, X, Loader2 } from "lucide-react";
 import type { Session } from "../api";
@@ -30,11 +29,10 @@ const sessionToChatSummary = (session: Session) => ({
  */
 export function ChatList({ onClose, onSelectChat }: ChatListProps) {
   const { selectChat } = useChatStore();
-  const { visitorId, initVisitor } = useSessionStore();
   const scrollViewportRef = useRef<HTMLElement | null>(null);
   const [isCreatingChat, setIsCreatingChat] = useState(false);
   const createSessionMutation = useCreateSessionMutation();
-  
+
   const {
     data,
     isLoading,
@@ -42,11 +40,11 @@ export function ChatList({ onClose, onSelectChat }: ChatListProps) {
     fetchNextPage,
     hasNextPage,
     isFetchingNextPage,
-  } = useChatsInfiniteQuery(visitorId);
+  } = useChatsInfiniteQuery();
 
   // Flatten all pages into a single array (per TanStack Query docs)
   const allSessions = data?.pages.flatMap((page) => page.sessions) || [];
-  
+
   // Show loading state during initial load
   const showLoading = isLoading && allSessions.length === 0;
 
@@ -68,22 +66,22 @@ export function ChatList({ onClose, onSelectChat }: ChatListProps) {
 
     // Try immediately
     findViewport();
-    
+
     // Also try after a short delay (for initial render)
     const timeoutId = setTimeout(() => {
       findViewport();
     }, 100);
-    
+
     // Use MutationObserver to watch for DOM changes
     const observer = new MutationObserver(() => {
       findViewport();
     });
-    
+
     const widgetContainer = document.querySelector('#chat-widget-container, .chat-widget-isolated, .chat-widget-wrapper');
     if (widgetContainer) {
       observer.observe(widgetContainer, { childList: true, subtree: true });
     }
-    
+
     return () => {
       clearTimeout(timeoutId);
       observer.disconnect();
@@ -103,13 +101,8 @@ export function ChatList({ onClose, onSelectChat }: ChatListProps) {
   const handleCreateChat = async () => {
     setIsCreatingChat(true);
     try {
-      let currentVisitorId = visitorId;
-      if (!currentVisitorId) {
-        currentVisitorId = await initVisitor();
-      }
-
       const session = await createSessionMutation.mutateAsync();
-      
+
       // Create temp chat ID for immediate UI feedback
       const tempChatId = `temp_new_chat_${Date.now()}`;
       selectChat(tempChatId);
@@ -144,19 +137,24 @@ export function ChatList({ onClose, onSelectChat }: ChatListProps) {
       <div className="widget-chat-list-header" style={{ flexShrink: 0 }}>
         <h2 className="widget-chat-list-title">Chats</h2>
         <div className="widget-flex widget-items-center widget-gap-1">
-          <Button 
-            onClick={handleCreateChat} 
-            size="icon" 
-            variant="ghost" 
+          <Button
+            onClick={handleCreateChat}
+            size="sm"
+            variant="ghost"
             style={{ flexShrink: 0 }}
             disabled={isCreatingChat}
           >
             {isCreatingChat ? (
-              <Loader2 className="widget-loader-spinner" style={{ width: '1rem', height: '1rem' }} />
+              <div className="widget-flex gap-1 item-center">
+                <Loader2 className="widget-loader-spinner" strokeWidth={2} style={{ width: '1rem', height: '1rem' }} />
+                <h3>Creating...</h3>
+              </div>
             ) : (
-              <Plus style={{ width: '1rem', height: '1rem' }} />
+              <div className="widget-flex gap-1 item-center">
+                <Plus style={{ width: '1rem', height: '1rem' }} strokeWidth={2} />
+                <h3>Start new chat</h3>
+              </div>
             )}
-            <span className="widget-sr-only">New chat</span>
           </Button>
           {onClose && (
             <Button onClick={onClose} size="icon" variant="ghost" className="widget-shrink-0" style={{ flexShrink: 0 }} aria-label="Close chat">
@@ -176,29 +174,31 @@ export function ChatList({ onClose, onSelectChat }: ChatListProps) {
           <p className="widget-text-sm widget-text-muted">No chats yet. Start a new conversation!</p>
           <Button onClick={handleCreateChat} size="sm" disabled={isCreatingChat}>
             {isCreatingChat ? (
-              <>
-                <Loader2 className="widget-loader-spinner" style={{ width: '1rem', height: '1rem', marginRight: '0.5rem' }} />
-                Creating...
-              </>
+              <div className="widget-flex gap-1 item-center">
+                <Loader2 className="widget-loader-spinner" strokeWidth={2} style={{ width: '1rem', height: '1rem' }} />
+                <h3>Creating...</h3>
+              </div>
             ) : (
-              <>
-                <Plus style={{ width: '1rem', height: '1rem', marginRight: '0.5rem' }} />
-                Start New Chat
-              </>
+              <div className="widget-flex gap-1 item-center">
+                <Plus style={{ width: '1rem', height: '1rem' }} strokeWidth={2} />
+                <h3>Start new chat</h3>
+              </div>
             )}
           </Button>
         </div>
       ) : (
         <ScrollArea className="widget-scroll-area" style={{ flex: 1, minHeight: 0, overflow: 'hidden' }}>
-          <div 
-            className="widget-p-3" 
-            style={{ 
-              display: 'flex', 
-              flexDirection: 'column', 
+          <div
+            className="widget-p-3"
+            style={{
+              display: 'flex',
+              flexDirection: 'column',
               gap: '0.75rem',
               paddingBottom: '1.5rem'
             }}
           >
+            <h3>Previous Chats</h3>
+
             <InfiniteScrollContainer
               onLoadMore={handleLoadMore}
               hasMore={hasNextPage || false}

@@ -19,6 +19,10 @@ function App() {
             This is a demo page for the embedded chat widget. The chat button
             should appear in the bottom right corner.
           </p>
+          {/* <div className="widget-flex">
+            <Loader2 className="widget-loader-spinner" strokeWidth={2} style={{ width: '1rem', height: '1rem' }} />
+            <h3>Creating...</h3>
+          </div> */}
         </div>
       </div>
     </QueryClientProvider>

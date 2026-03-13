@@ -27,11 +27,17 @@ export interface Session {
   id: string;
   visitor?: {
     id: string;
+    profile?: {
+      name?: string | null;
+      email?: string | null;
+      phone?: string | null;
+    };
   };
   external_user_id?: string | null; // Legacy field, may still be present
   created_at: string;
   expires_at?: string;
   is_active: boolean;
+  status: "ACTIVE" | "SNOOZED" | "INACTIVE"; // New session states
   metadata?: Record<string, any>;
   last_message?: string | null;
   last_message_at?: string | null;
@@ -73,26 +79,12 @@ export interface Visitor {
   id: string;
   created_at: string;
   last_seen_at: string;
+  profile?: {
+    name?: string | null;
+    email?: string | null;
+    phone?: string | null;
+  };
 }
-
-// Visitor API
-export const createVisitor = async (): Promise<Visitor> => {
-  const response = await axios.post<ApiResponse<Visitor>>("/api/chats/visitors/", {});
-  if (!response.data.success) {
-    throw new Error(response.data.message || "Failed to create visitor");
-  }
-  return response.data.data;
-};
-
-export const validateVisitor = async (visitorId: string): Promise<Visitor> => {
-  const response = await axios.get<ApiResponse<Visitor>>(
-    `/api/chats/visitors/${visitorId}/validate/`
-  );
-  if (!response.data.success) {
-    throw new Error(response.data.message || "Failed to validate visitor");
-  }
-  return response.data.data;
-};
 
 // Widget API
 export const getWidgetConfig = async (): Promise<WidgetConfig> => {
@@ -103,13 +95,9 @@ export const getWidgetConfig = async (): Promise<WidgetConfig> => {
   return response.data.data;
 };
 
-// Session API
-export const createSession = async (
-  visitorId: string
-): Promise<Session> => {
-  const response = await axios.post<ApiResponse<Session>>("/api/chats/sessions/", {
-    visitor_id: visitorId,
-  });
+// Session API - No longer requires visitor_id (backend resolves from IP)
+export const createSession = async (): Promise<Session> => {
+  const response = await axios.post<ApiResponse<Session>>("/api/chats/sessions/", {});
   if (!response.data.success) {
     throw new Error(response.data.message || "Failed to create session");
   }
@@ -132,25 +120,21 @@ export interface SessionsListResponse {
 }
 
 export const listSessions = async (
-  visitorId?: string,
-  isActive?: boolean,
   limit?: number,
   offset?: number
 ): Promise<{ sessions: Session[]; hasMore: boolean; total: number }> => {
   const params = new URLSearchParams();
-  if (visitorId) params.append("visitor_id", visitorId);
-  if (isActive !== undefined) params.append("is_active", String(isActive));
   if (limit) params.append("limit", String(limit));
   if (offset !== undefined) params.append("offset", String(offset));
 
-  // API returns: { success: true, data: { results: { count, next, previous, results: [...] } } }
+  // Backend now automatically filters by IP-resolved visitor and excludes INACTIVE sessions
   const response = await axios.get<ApiResponse<{ results: SessionsListResponse }>>(
     `/api/chats/sessions/?${params.toString()}`
   );
   if (!response.data.success) {
     throw new Error(response.data.message || "Failed to list sessions");
   }
-  // Access nested results: data.results.results
+  
   const sessions = response.data.data.results.results || [];
   const total = response.data.data.results.count || 0;
   const currentCount = (offset || 0) + sessions.length;
@@ -166,94 +150,116 @@ export const deleteSession = async (sessionId: string): Promise<void> => {
   }
 };
 
-// Message API
+// Message API - No longer requires visitor_id (backend resolves from IP)
 export const sendMessage = async (
   message: string,
-  sessionId: string,
-  visitorId: string
+  sessionId: string
 ): Promise<ChatResponse> => {
   const apiKey = (window as any).__CHAT_WIDGET_CONFIG__?.apiKey;
   
-  const response = await axios.post<ApiResponse<ChatResponse>>(
-    "/api/chats/messages/chat/",
-    {
-      message,
-      session_id: sessionId,
-      visitor_id: visitorId,
-    },
-    {
-      headers: {
-        ...(apiKey ? { "X-API-Key": apiKey } : {}),
+  try {
+    const response = await axios.post<ApiResponse<ChatResponse>>(
+      "/api/chats/messages/chat/",
+      {
+        message,
+        session_id: sessionId,
       },
+      {
+        headers: {
+          ...(apiKey ? { "X-API-Key": apiKey } : {}),
+        },
+      }
+    );
+    if (!response.data.success) {
+      throw new Error(response.data.message || "Failed to send message");
     }
-  );
-  if (!response.data.success) {
-    throw new Error(response.data.message || "Failed to send message");
+    return response.data.data;
+  } catch (error: any) {
+    // Handle session state errors
+    if (error.response?.status === 400 && error.response?.data?.message?.includes("INACTIVE")) {
+      throw new Error("This conversation has ended. Please start a new conversation.");
+    }
+    if (error.response?.status === 400 && error.response?.data?.message?.includes("session")) {
+      throw new Error(error.response.data.message || "Session error occurred");
+    }
+    throw error;
   }
-  return response.data.data;
 };
 
 export const sendMessageStream = async (
   message: string,
   sessionId: string,
-  visitorId: string,
   onChunk: (content: string) => void
 ): Promise<string> => {
   const apiKey = (window as any).__CHAT_WIDGET_CONFIG__?.apiKey;
   const apiUrl = (window as any).__CHAT_WIDGET_CONFIG__?.apiUrl || axios.defaults.baseURL;
 
-  const response = await fetch(`${apiUrl}/api/chats/messages/chat/stream/`, {
-    method: "POST",
-    headers: {
-      "X-API-Key": apiKey || "",
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      message,
-      session_id: sessionId,
-      visitor_id: visitorId,
-    }),
-  });
+  try {
+    const response = await fetch(`${apiUrl}/api/chats/messages/chat/stream/`, {
+      method: "POST",
+      headers: {
+        "X-API-Key": apiKey || "",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        message,
+        session_id: sessionId,
+      }),
+    });
 
-  if (!response.ok) {
-    throw new Error("Failed to send message");
-  }
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      if (response.status === 400 && errorData.message?.includes("INACTIVE")) {
+        throw new Error("This conversation has ended. Please start a new conversation.");
+      }
+      if (response.status === 400 && errorData.message?.includes("session")) {
+        throw new Error(errorData.message || "Session error occurred");
+      }
+      throw new Error("Failed to send message");
+    }
 
-  const reader = response.body?.getReader();
-  if (!reader) {
-    throw new Error("Failed to get response reader");
-  }
+    const reader = response.body?.getReader();
+    if (!reader) {
+      throw new Error("Failed to get response reader");
+    }
 
-  const decoder = new TextDecoder();
-  let buffer = "";
-  let messageId = "";
+    const decoder = new TextDecoder();
+    let buffer = "";
+    let messageId = "";
 
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
 
-    buffer += decoder.decode(value, { stream: true });
-    const lines = buffer.split("\n");
-    buffer = lines.pop() || "";
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split("\n");
+      buffer = lines.pop() || "";
 
-    for (const line of lines) {
-      if (line.startsWith("data: ")) {
-        const json = line.slice(6);
-        try {
-          const data = JSON.parse(json);
-          if (data.type === "chunk") {
-            onChunk(data.content);
-          } else if (data.type === "done") {
-            messageId = data.message_id;
+      for (const line of lines) {
+        if (line.startsWith("data: ")) {
+          const json = line.slice(6);
+          try {
+            const data = JSON.parse(json);
+            if (data.type === "chunk") {
+              onChunk(data.content);
+            } else if (data.type === "done") {
+              messageId = data.message_id;
+            }
+          } catch (e) {
+            console.error("Failed to parse SSE data:", e);
           }
-        } catch (e) {
-          console.error("Failed to parse SSE data:", e);
         }
       }
     }
-  }
 
-  return messageId;
+    return messageId;
+  } catch (error: any) {
+    // Re-throw our custom errors
+    if (error.message.includes("conversation has ended") || error.message.includes("Session error")) {
+      throw error;
+    }
+    throw new Error("Failed to send message");
+  }
 };
 
 export const getChatHistory = async (
@@ -291,19 +297,15 @@ export interface SuggestionsResponse {
   message_count: number;
 }
 
-export const getSuggestions = async (
-  sessionId: string,
-  visitorId?: string
-): Promise<SuggestionsResponse> => {
-  const params = new URLSearchParams({ session_id: sessionId });
-  if (visitorId) params.append("visitor_id", visitorId);
+// Note: getSuggestions function removed - suggestions now come from WebSocket messages
 
-  const response = await axios.get<ApiResponse<SuggestionsResponse>>(
-    `/api/chats/messages/suggestions/?${params.toString()}`
+
+export const reactivateSession = async (sessionId: string): Promise<Session> => {
+  const response = await axios.post<ApiResponse<Session>>(
+    `/api/chats/sessions/${sessionId}/reactivate/`
   );
   if (!response.data.success) {
-    throw new Error(response.data.message || "Failed to get suggestions");
+    throw new Error(response.data.message || "Failed to reactivate session");
   }
   return response.data.data;
 };
-

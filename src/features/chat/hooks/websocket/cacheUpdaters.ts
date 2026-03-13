@@ -263,30 +263,10 @@ export function updateSessionInList(
   lastMessage: string,
   lastMessageAt: string
 ) {
-  // Find visitorId from session data in cache
-  let visitorId: string | null = null;
-  
-  const allSessionsQueries = queryClient.getQueriesData<{
-    pages: Array<{ sessions: Session[]; hasMore: boolean; total: number }>;
-  }>({ queryKey: [...chatKeys.all, "list"], exact: false });
-  
-  for (const [_queryKey, data] of allSessionsQueries) {
-    if (data) {
-      const allSessions = data.pages.flatMap((page) => page.sessions);
-      const session = allSessions.find((s) => s.id === sessionId);
-      if (session?.visitor?.id) {
-        visitorId = session.visitor.id;
-        break;
-      }
-    }
-  }
-  
-  if (!visitorId) return;
-  
-  // Update infinite query cache for the specific visitor
+  // Update infinite query cache
   queryClient.setQueryData<{
     pages: Array<{ sessions: Session[]; hasMore: boolean; total: number }>;
-  }>([...chatKeys.list(visitorId), "infinite"], (old) => {
+  }>(["chats", "list", "infinite"], (old) => {
     if (!old) return old;
     
     return {
@@ -450,14 +430,7 @@ export function updateCompleteMessage(
     suggestions: suggestions,
   });
 
-  // Update suggestions cache
-  if (suggestions.length > 0) {
-    queryClient.setQueryData(chatKeys.suggestions(sessionId), {
-      suggestions: suggestions,
-      session_id: sessionId,
-      message_count: 0,
-    });
-  }
+  // Note: Suggestions are now stored in conversation state only, not separate cache
   
   // Play notification sound when response and recommendations are received
   // Play for all complete responses (responseId indicates a complete response was received)
@@ -599,44 +572,22 @@ export function addSessionEndMessage(
 
   // Update session in sessions list cache to set is_active: false
   // This allows users to see that the chat has ended even if they're not in the chat
-  // Find visitorId from session data in cache
-  let visitorId: string | null = null;
-  
-  // Try to find visitorId from sessions cache
-  const allSessionsQueries = queryClient.getQueriesData<{
-    pages: Array<{ sessions: Session[]; hasMore: boolean; total: number }>;
-  }>({ queryKey: [...chatKeys.all, "list"], exact: false });
-  
-  for (const [_queryKey, data] of allSessionsQueries) {
-    if (data) {
-      const allSessions = data.pages.flatMap((page) => page.sessions);
-      const session = allSessions.find((s) => s.id === sessionId);
-      if (session?.visitor?.id) {
-        visitorId = session.visitor.id;
-        break;
-      }
-    }
-  }
-  
-  // Update infinite query cache for the specific visitor
-  // Optimistically update: is_active: false, last_message, last_message_at
   const sessionEndTimestamp = new Date().toISOString();
   
-  if (visitorId) {
-    queryClient.setQueryData<{
-      pages: Array<{ sessions: Session[]; hasMore: boolean; total: number }>;
-    }>([...chatKeys.list(visitorId), "infinite"], (old) => {
-      if (!old) return old;
-      
-      return {
-        ...old,
-        pages: old.pages.map((page) => ({
-          ...page,
-          sessions: page.sessions.map((session) =>
-            session.id === sessionId
-              ? { 
-                  ...session, 
-                  is_active: false,
+  queryClient.setQueryData<{
+    pages: Array<{ sessions: Session[]; hasMore: boolean; total: number }>;
+  }>(["chats", "list", "infinite"], (old) => {
+    if (!old) return old;
+    
+    return {
+      ...old,
+      pages: old.pages.map((page) => ({
+        ...page,
+        sessions: page.sessions.map((session) =>
+          session.id === sessionId
+            ? { 
+                ...session, 
+                is_active: false,
                   last_message: message,
                   last_message_at: sessionEndTimestamp,
                 }
@@ -645,34 +596,6 @@ export function addSessionEndMessage(
         })),
       };
     });
-  } else {
-    // Fallback: update all session queries if visitorId not found
-    queryClient.setQueriesData<{
-      pages: Array<{ sessions: Session[]; hasMore: boolean; total: number }>;
-    }>(
-      { queryKey: [...chatKeys.all, "list"], exact: false },
-      (old) => {
-        if (!old) return old;
-        
-        return {
-          ...old,
-          pages: old.pages.map((page) => ({
-            ...page,
-            sessions: page.sessions.map((session) =>
-              session.id === sessionId
-                ? { 
-                    ...session, 
-                    is_active: false,
-                    last_message: message,
-                    last_message_at: sessionEndTimestamp,
-                  }
-                : session
-            ),
-          })),
-        };
-      }
-    );
-  }
 
   // Play notification sound for session end message
   if (responseId) {
@@ -681,3 +604,83 @@ export function addSessionEndMessage(
 }
 
 
+
+/**
+ * Add session snooze message to cache
+ */
+export function addSessionSnoozeMessage(
+  queryClient: QueryClient,
+  sessionId: string,
+  message: string,
+  responseId: string
+) {
+  const sessionSnoozeMessage: Message = {
+    id: responseId || `session_snooze_${Date.now()}`,
+    chatId: sessionId,
+    content: message,
+    role: "assistant",
+    timestamp: new Date(),
+    isRead: false,
+    metadata: { type: "session_snooze" }, // Add metadata to identify as session_snooze
+  };
+
+  queryClient.setQueryData<{ messages: Message[]; hasMore: boolean; total: number }>(
+    chatKeys.messages(sessionId),
+    (old) => {
+      if (!old) {
+        return {
+          messages: [sessionSnoozeMessage],
+          hasMore: false,
+          total: 1,
+        };
+      }
+
+      // Check if this session snooze message already exists (prevent duplicates by response_id)
+      const existingIndex = old.messages.findIndex(
+        (msg) => msg.id === responseId || 
+        (msg.id.startsWith("session_snooze_") && msg.content === message)
+      );
+
+      const messages = [...old.messages];
+      if (existingIndex >= 0) {
+        // Update existing session snooze message
+        messages[existingIndex] = sessionSnoozeMessage;
+      } else {
+        // Add new session snooze message
+        messages.push(sessionSnoozeMessage);
+      }
+
+      return {
+        ...old,
+        messages,
+        total: messages.length,
+      };
+    }
+  );
+
+  // Play notification sound for session snooze
+  if (responseId) {
+    playNotificationSound(responseId);
+  }
+
+  // Mark conversation as snoozed
+  queryClient.setQueryData([...chatKeys.messages(sessionId), "state"], {
+    needsInfo: null,
+    isComplete: false,
+    isSnoozed: true,
+    suggestions: [],
+  });
+
+  // Update session in sessions list cache with last_message
+  // Truncate message to reasonable length for display
+  const truncatedMessage = message.length > 100 
+    ? message.substring(0, 100) + "..." 
+    : message;
+  
+  updateSessionInList(
+    queryClient,
+    sessionId,
+    truncatedMessage,
+    new Date().toISOString()
+  );
+}

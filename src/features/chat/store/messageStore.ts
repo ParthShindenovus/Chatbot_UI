@@ -1,8 +1,7 @@
 import { create } from "zustand";
 import type { Message } from "../types";
-import { getChatHistory, sendMessage, sendMessageStream, createSession, getSuggestions, type Message as ApiMessage } from "../api";
+import { getChatHistory, sendMessage, sendMessageStream, createSession, type Message as ApiMessage } from "../api";
 import { useChatStore } from "./chatStore";
-import { useSessionStore } from "./sessionStore";
 
 // Helper to convert API message to app message
 const convertApiMessage = (apiMsg: ApiMessage, sessionId: string): Message => ({
@@ -23,8 +22,7 @@ interface MessageStore {
   hasMore: Record<string, boolean>; // Whether more messages can be loaded
   offset: Record<string, number>; // Current offset for pagination
   loadedSessions: Record<string, boolean>; // Track which sessions have been loaded
-  suggestions: Record<string, string[]>; // Suggestions for each session
-  isLoadingSuggestions: Record<string, boolean>; // Loading state for suggestions
+  // Note: suggestions now come from WebSocket messages, not API
   needsInfo: Record<string, "name" | "email" | "phone" | "issue" | null>; // What info is needed
   isComplete: Record<string, boolean>; // Whether conversation is complete
   loadInitialMessages: (sessionId: string) => Promise<void>;
@@ -32,12 +30,8 @@ interface MessageStore {
   sendMessage: (sessionId: string, content: string, useStreaming?: boolean) => Promise<void>;
   getMessages: (sessionId: string) => Message[];
   clearMessages: (sessionId: string) => void;
-  loadSuggestions: (sessionId: string) => Promise<void>;
-  getSuggestions: (sessionId: string) => string[];
-  clearSuggestions: (sessionId: string) => void;
   getNeedsInfo: (sessionId: string) => "name" | "email" | "phone" | "issue" | null;
   getIsComplete: (sessionId: string) => boolean;
-  setInitialSuggestions: (sessionId: string, conversationType: "sales" | "support" | "knowledge") => void;
   addInitialAssistantMessage: (sessionId: string, conversationType: "sales" | "support" | "knowledge") => void;
 }
 
@@ -52,8 +46,7 @@ export const useMessageStore = create<MessageStore>((set, get) => ({
   hasMore: {},
   offset: {},
   loadedSessions: {}, // Track loaded sessions to prevent duplicate API calls
-  suggestions: {},
-  isLoadingSuggestions: {},
+  // Note: suggestions now come from WebSocket messages, not API
   needsInfo: {},
   isComplete: {},
   loadInitialMessages: async (sessionId: string) => {
@@ -216,18 +209,6 @@ export const useMessageStore = create<MessageStore>((set, get) => ({
   sendMessage: async (sessionId: string, content: string, useStreaming: boolean = false) => {
     if (!content.trim()) return;
 
-    const sessionStore = useSessionStore.getState();
-    const visitorId = sessionStore.visitorId;
-    const conversationType = sessionStore.conversationType || "knowledge";
-    
-    if (!visitorId) {
-      throw new Error("Visitor ID is required. Please initialize the widget first.");
-    }
-
-    if (!conversationType) {
-      throw new Error("Conversation type is required. Please select a conversation type first.");
-    }
-
     // Check if this is a temporary chat (new chat without session)
     const isTempChat = sessionId.startsWith("temp_new_chat_");
     let actualSessionId = sessionId;
@@ -236,7 +217,7 @@ export const useMessageStore = create<MessageStore>((set, get) => ({
     if (isTempChat) {
       try {
         console.log("📝 Creating session for first message...");
-        const session = await createSession(visitorId);
+        const session = await createSession(); // No longer requires visitor_id
         actualSessionId = session.id;
         
         console.log(`✅ Created session: ${actualSessionId}`);
@@ -251,9 +232,6 @@ export const useMessageStore = create<MessageStore>((set, get) => ({
         useChatStore.getState().selectChat(session.id);
         
         console.log(`✅ Session created - activeChatId set to: ${session.id}`);
-        
-        // Update session store
-        useSessionStore.setState({ sessionId: session.id });
         
         // Move messages from temp sessionId to real sessionId
         // Also mark that we've already loaded messages for this session (to prevent reload)
@@ -271,16 +249,6 @@ export const useMessageStore = create<MessageStore>((set, get) => ({
             loadedSessions: { ...state.loadedSessions, [actualSessionId]: true },
           };
         });
-        
-        // Load suggestions after session is created (only for knowledge type)
-        const sessionStore = useSessionStore.getState();
-        if (sessionStore.conversationType === "knowledge") {
-          setTimeout(() => {
-            get().loadSuggestions(actualSessionId).catch((err) => {
-              console.warn("Failed to load initial suggestions:", err);
-            });
-          }, 300);
-        }
       } catch (error) {
         console.error("Failed to create session:", error);
         throw error;
@@ -316,7 +284,6 @@ export const useMessageStore = create<MessageStore>((set, get) => ({
         await sendMessageStream(
           content.trim(),
           actualSessionId,
-          visitorId,
           (chunk: string) => {
             fullContent += chunk;
             set((state) => ({
@@ -336,7 +303,7 @@ export const useMessageStore = create<MessageStore>((set, get) => ({
         };
 
         // Note: For streaming, we don't get suggestions/needs_info/complete in the stream
-        // We'll need to fetch them separately or handle them differently
+        // These will come from WebSocket messages instead
         set((state) => {
           const existingMessages = state.messages[actualSessionId] || [];
           return {
@@ -348,19 +315,9 @@ export const useMessageStore = create<MessageStore>((set, get) => ({
             streamingContent: { ...state.streamingContent, [actualSessionId]: "" },
           };
         });
-        
-        // Fetch suggestions after streaming completes (only for knowledge type)
-        const sessionStore = useSessionStore.getState();
-        if (sessionStore.conversationType === "knowledge") {
-          setTimeout(() => {
-            get().loadSuggestions(actualSessionId).catch((err) => {
-              console.warn("Failed to load suggestions after streaming:", err);
-            });
-          }, 500);
-        }
       } else {
         // Non-streaming response
-        const response = await sendMessage(content.trim(), actualSessionId, visitorId);
+        const response = await sendMessage(content.trim(), actualSessionId);
         
         // Update user message with real ID from response
         const updatedUserMessage: Message = {
@@ -397,15 +354,9 @@ export const useMessageStore = create<MessageStore>((set, get) => ({
             return true;
           });
           
-          // Extract suggestions, needs_info, and complete from response
-          const apiSuggestions = response.suggestions || [];
+          // Extract needs_info and complete from response (suggestions come from WebSocket)
           const needsInfo = response.needs_info || null;
           const isComplete = response.complete || false;
-          
-          // Use API suggestions if provided, otherwise keep existing ones
-          const finalSuggestions = apiSuggestions.length > 0 
-            ? apiSuggestions 
-            : (state.suggestions[actualSessionId] || []);
           
           return {
             messages: {
@@ -415,22 +366,13 @@ export const useMessageStore = create<MessageStore>((set, get) => ({
             isSending: { ...state.isSending, [actualSessionId]: false },
             // Mark session as loaded to prevent refetching
             loadedSessions: { ...state.loadedSessions, [actualSessionId]: true },
-            // Update suggestions, needs_info, and complete from API response
-            suggestions: { ...state.suggestions, [actualSessionId]: finalSuggestions },
+            // Update needs_info and complete from API response (suggestions come from WebSocket)
             needsInfo: { ...state.needsInfo, [actualSessionId]: needsInfo },
             isComplete: { ...state.isComplete, [actualSessionId]: isComplete },
           };
         });
         
-        // If suggestions weren't provided in response, fetch them (only for knowledge type)
-        const sessionStore = useSessionStore.getState();
-        if ((!response.suggestions || response.suggestions.length === 0) && sessionStore.conversationType === "knowledge") {
-          setTimeout(() => {
-            get().loadSuggestions(actualSessionId).catch((err) => {
-              console.warn("Failed to load suggestions:", err);
-            });
-          }, 500);
-        }
+        // Note: Suggestions now come from WebSocket messages, not API calls
       }
     } catch (error: any) {
       console.error("Failed to send message:", error);
@@ -461,62 +403,10 @@ export const useMessageStore = create<MessageStore>((set, get) => ({
     set((state) => {
       const { [sessionId]: _, ...restMessages } = state.messages;
       const { [sessionId]: __, ...restLoadedSessions } = state.loadedSessions;
-      const { [sessionId]: ___, ...restSuggestions } = state.suggestions;
       return { 
         messages: restMessages,
         loadedSessions: restLoadedSessions,
-        suggestions: restSuggestions,
       };
-    });
-  },
-  loadSuggestions: async (sessionId: string) => {
-    // Don't load suggestions for temp chats
-    if (sessionId.startsWith("temp_new_chat_")) {
-      return;
-    }
-    
-    // Only load suggestions for Knowledge conversation type
-    const sessionStore = useSessionStore.getState();
-    const conversationType = sessionStore.conversationType;
-    if (conversationType !== "knowledge") {
-      // Sales and Support don't use suggestions API
-      return;
-    }
-    
-    // Skip if already loading
-    if (get().isLoadingSuggestions[sessionId]) {
-      return;
-    }
-    
-    set((state) => ({
-      isLoadingSuggestions: { ...state.isLoadingSuggestions, [sessionId]: true },
-    }));
-    
-    try {
-      const visitorId = sessionStore.visitorId;
-      
-      const response = await getSuggestions(sessionId, visitorId || undefined);
-      
-      set((state) => ({
-        suggestions: { ...state.suggestions, [sessionId]: response.suggestions },
-        isLoadingSuggestions: { ...state.isLoadingSuggestions, [sessionId]: false },
-      }));
-      
-      console.log(`✅ Loaded ${response.suggestions.length} suggestions for session ${sessionId}`);
-    } catch (error) {
-      console.error("Failed to load suggestions:", error);
-      set((state) => ({
-        isLoadingSuggestions: { ...state.isLoadingSuggestions, [sessionId]: false },
-      }));
-    }
-  },
-  getSuggestions: (sessionId: string) => {
-    return get().suggestions[sessionId] || [];
-  },
-  clearSuggestions: (sessionId: string) => {
-    set((state) => {
-      const { [sessionId]: _, ...rest } = state.suggestions;
-      return { suggestions: rest };
     });
   },
   getNeedsInfo: (sessionId: string) => {
@@ -524,25 +414,6 @@ export const useMessageStore = create<MessageStore>((set, get) => ({
   },
   getIsComplete: (sessionId: string) => {
     return get().isComplete[sessionId] || false;
-  },
-  setInitialSuggestions: (sessionId: string, conversationType: "sales" | "support" | "knowledge") => {
-    let initialSuggestions: string[] = [];
-    
-    // Only set suggestions for knowledge type
-    if (conversationType === "knowledge") {
-      initialSuggestions = [
-        "What is a novated lease?",
-        "How does FBT exemption work?",
-        "What EVs are available?",
-        "What are the tax benefits?",
-        "How do I apply for a lease?",
-      ];
-    }
-    // Sales and Support don't get suggestions - they get assistant messages instead
-    
-    set((state) => ({
-      suggestions: { ...state.suggestions, [sessionId]: initialSuggestions },
-    }));
   },
   addInitialAssistantMessage: (sessionId: string, conversationType: "sales" | "support" | "knowledge") => {
     let messageContent = "";
@@ -555,7 +426,7 @@ export const useMessageStore = create<MessageStore>((set, get) => ({
         messageContent = "Hello! I'm here to help you with any issues or questions you may have. To assist you better, I'll need some information:\n\n• Your name\n• Your email address\n• A description of the issue you're experiencing\n\nPlease provide these details and I'll help you resolve your issue!";
         break;
       case "knowledge":
-        // Knowledge doesn't need an initial message - it uses suggestions
+        // Knowledge doesn't need an initial message - it uses suggestions from WebSocket
         return;
     }
     

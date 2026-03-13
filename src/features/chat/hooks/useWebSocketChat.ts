@@ -5,10 +5,9 @@
 
 import { useEffect, useRef, useState, useCallback } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { useSessionStore } from "../store/sessionStore";
 import { WebSocketConnection } from "./websocket/websocketConnection";
 import { handleWebSocketMessage, type StreamingState } from "./websocket/messageHandlers";
-import { updateStreamingMessage, updateCompleteMessage, addIdleWarningMessage, addSessionEndMessage } from "./websocket/cacheUpdaters";
+import { updateStreamingMessage, updateCompleteMessage, addIdleWarningMessage, addSessionEndMessage, addSessionSnoozeMessage } from "./websocket/cacheUpdaters";
 import { getWebSocketUrl } from "./websocket/getWebSocketUrl";
 
 interface UseWebSocketChatOptions {
@@ -28,7 +27,6 @@ export function useWebSocketChat({
   onMessage,
   onError,
 }: UseWebSocketChatOptions) {
-  const { visitorId } = useSessionStore();
   const queryClient = useQueryClient();
   const connectionRef = useRef<WebSocketConnection | null>(null);
   const [isConnected, setIsConnected] = useState(false);
@@ -49,7 +47,7 @@ export function useWebSocketChat({
   }, [onError, onMessage]);
 
   const connect = useCallback(() => {
-    if (!enabled || !sessionId || !visitorId) {
+    if (!enabled || !sessionId) {
       return;
     }
 
@@ -71,13 +69,12 @@ export function useWebSocketChat({
     try {
       setIsConnecting(true);
       
-      // Get WebSocket URL with session and visitor IDs (some backends require these in URL)
-      const wsUrl = getWebSocketUrl(sessionId, visitorId);
+      // Get WebSocket URL with session ID (backend resolves visitor from IP)
+      const wsUrl = getWebSocketUrl(sessionId);
       
       console.log("Attempting WebSocket connection:", {
         url: wsUrl,
         sessionId,
-        visitorId,
         enabled,
       });
       
@@ -138,6 +135,13 @@ export function useWebSocketChat({
                   setIsConnecting(false);
                 }
               },
+              onSessionSnooze: (message, snoozeSessionId, responseId) => {
+                // Only add session snooze if it's for the current session
+                if (snoozeSessionId === sessionId) {
+                  console.log("Adding session snooze message:", message);
+                  addSessionSnoozeMessage(queryClient, sessionId, message, responseId);
+                }
+              },
               onError: (error) => {
                 console.error("WebSocket message error:", error);
                 if (onErrorRef.current) {
@@ -181,7 +185,7 @@ export function useWebSocketChat({
         onErrorRef.current(error as Error);
       }
     }
-  }, [enabled, sessionId, visitorId, queryClient]);
+  }, [enabled, sessionId, queryClient]);
 
   // Send message via WebSocket
   const sendMessage = useCallback(
@@ -194,16 +198,10 @@ export function useWebSocketChat({
         return false;
       }
 
-      if (!visitorId) {
-        console.error("Visitor ID is required");
-        return false;
-      }
-
       const payload = {
         type: "chat_message",
         message: message,
         session_id: sessionId,
-        visitor_id: visitorId,
       };
 
       const sent = connectionRef.current.send(payload);
@@ -212,29 +210,29 @@ export function useWebSocketChat({
       }
       return sent;
     },
-    [sessionId, visitorId, isConnected, isConnecting, connect]
+    [sessionId, isConnected, isConnecting, connect]
   );
 
   // Connect on mount and when dependencies change
   useEffect(() => {
     // Only connect if all conditions are met
-    if (enabled && sessionId && visitorId && !sessionId.startsWith("temp_new_chat_")) {
+    if (enabled && sessionId && !sessionId.startsWith("temp_new_chat_")) {
       // Small delay to prevent rapid reconnections and allow React to settle
       const timeoutId = setTimeout(() => {
         // Double-check conditions before connecting (might have changed during timeout)
-        if (enabled && sessionId && visitorId && !sessionId.startsWith("temp_new_chat_")) {
+        if (enabled && sessionId && !sessionId.startsWith("temp_new_chat_")) {
           connect();
         }
       }, 100);
 
       return () => {
         clearTimeout(timeoutId);
-        // Only cleanup if sessionId or visitorId changed (not just re-render)
+        // Only cleanup if sessionId changed (not just re-render)
         // This prevents disconnecting during normal React re-renders
       };
     }
 
-    // Cleanup on unmount or when sessionId/visitorId changes
+    // Cleanup on unmount or when sessionId changes
     return () => {
       if (connectionRef.current) {
         connectionRef.current.disconnect();
@@ -244,7 +242,7 @@ export function useWebSocketChat({
       setIsConnected(false);
       setIsConnecting(false);
     };
-  }, [enabled, sessionId, visitorId]); // Removed 'connect' from dependencies to prevent loops
+  }, [enabled, sessionId]); // Removed visitorId and 'connect' from dependencies
 
   return {
     isConnected,

@@ -4,7 +4,7 @@
  */
 
 export interface WebSocketMessage {
-  type: "chunk" | "complete" | "error" | "idle_warning" | "session_end";
+  type: "chunk" | "complete" | "error" | "idle_warning" | "session_end" | "session_snooze";
   chunk?: string;
   done?: boolean;
   message_id?: string;
@@ -14,8 +14,8 @@ export interface WebSocketMessage {
   needs_info?: string | null;
   suggestions?: string[];
   error?: string;
-  message?: string; // For idle_warning and session_end
-  session_id?: string; // For idle_warning and session_end
+  message?: string; // For idle_warning, session_end, and session_snooze
+  session_id?: string; // For idle_warning, session_end, and session_snooze
   metadata?: Record<string, any>; // For metadata
 }
 
@@ -36,6 +36,7 @@ export interface MessageHandlerCallbacks {
   }) => void;
   onIdleWarning?: (message: string, sessionId: string, responseId: string) => void;
   onSessionEnd?: (message: string, sessionId: string, responseId: string) => void;
+  onSessionSnooze?: (message: string, sessionId: string, responseId: string) => void;
   onError?: (error: Error) => void;
 }
 
@@ -88,6 +89,12 @@ export function handleWebSocketMessage(
     case "session_end":
       if (data.message && data.session_id && data.response_id) {
         callbacks.onSessionEnd?.(data.message, data.session_id, data.response_id);
+      }
+      return streamingState;
+
+    case "session_snooze":
+      if (data.message && data.session_id && data.response_id) {
+        callbacks.onSessionSnooze?.(data.message, data.session_id, data.response_id);
       }
       return streamingState;
 

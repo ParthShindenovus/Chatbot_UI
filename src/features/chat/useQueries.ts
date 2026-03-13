@@ -1,6 +1,5 @@
 import { useQuery, useMutation, useQueryClient, useInfiniteQuery } from "@tanstack/react-query";
-import { getChatHistory, sendMessage, createSession, getSuggestions, listSessions, type Session } from "./api";
-import { useSessionStore } from "./store/sessionStore";
+import { getChatHistory, sendMessage, createSession, listSessions, reactivateSession, type Session } from "./api";
 import type { Message as ApiMessage } from "./api";
 import type { Message } from "./types";
 
@@ -12,16 +11,15 @@ const convertApiMessage = (apiMsg: ApiMessage, sessionId: string): Message => ({
   role: apiMsg.role,
   timestamp: new Date(apiMsg.timestamp),
   isRead: apiMsg.role === "user",
-  metadata: apiMsg.metadata, // Preserve metadata to identify idle_warning and session_end
+  metadata: apiMsg.metadata, // Preserve metadata to identify idle_warning, session_end, and session_snooze
 });
 
 // Query Keys
 export const chatKeys = {
   all: ["chats"] as const,
   lists: () => [...chatKeys.all, "list"] as const,
-  list: (visitorId: string) => [...chatKeys.lists(), visitorId] as const,
+  list: () => [...chatKeys.lists()] as const,
   messages: (sessionId: string) => [...chatKeys.all, "messages", sessionId] as const,
-  suggestions: (sessionId: string) => [...chatKeys.all, "suggestions", sessionId] as const,
 };
 
 /**
@@ -47,10 +45,22 @@ export function useMessagesQuery(sessionId: string | null, enabled: boolean = tr
         (msg) => msg.metadata?.type === "session_end"
       );
       
+      // Check if the last message is session_snooze and mark conversation as snoozed
+      const lastMessage = convertedMessages[convertedMessages.length - 1];
+      const isLastMessageSnooze = lastMessage?.metadata?.type === "session_snooze";
+      
       if (hasSessionEnd) {
         queryClient.setQueryData([...chatKeys.messages(sessionId), "state"], {
           needsInfo: null,
           isComplete: true,
+          isSnoozed: false,
+          suggestions: [],
+        });
+      } else if (isLastMessageSnooze) {
+        queryClient.setQueryData([...chatKeys.messages(sessionId), "state"], {
+          needsInfo: null,
+          isComplete: false,
+          isSnoozed: true,
           suggestions: [],
         });
       }
@@ -100,23 +110,18 @@ export function useMessagesInfiniteQuery(sessionId: string | null) {
  */
 export function useSendMessageMutation() {
   const queryClient = useQueryClient();
-  const { visitorId } = useSessionStore();
 
   return useMutation({
     mutationFn: async ({ sessionId, content }: { sessionId: string; content: string }) => {
-      if (!visitorId) {
-        throw new Error("Visitor ID is required");
-      }
-
       // If temp chat, create session first
       let actualSessionId = sessionId;
       if (sessionId.startsWith("temp_new_chat_")) {
-        const session = await createSession(visitorId);
+        const session = await createSession(); // No longer requires visitor_id
         actualSessionId = session.id;
       }
 
-      // Send message
-      const response = await sendMessage(content, actualSessionId, visitorId);
+      // Send message - backend resolves visitor from IP
+      const response = await sendMessage(content, actualSessionId);
       return { ...response, actualSessionId };
     },
     onMutate: async ({ sessionId, content }) => {
@@ -232,21 +237,6 @@ export function useSendMessageMutation() {
         }
       );
 
-      // Update suggestions cache if provided in API response
-      if (data.suggestions && data.suggestions.length > 0) {
-        queryClient.setQueryData(chatKeys.suggestions(data.actualSessionId), {
-          suggestions: data.suggestions,
-          session_id: data.actualSessionId,
-          message_count: 0,
-        });
-      } else {
-        // If no suggestions in response, invalidate to trigger API call
-        queryClient.invalidateQueries({ 
-          queryKey: chatKeys.suggestions(data.actualSessionId),
-          refetchType: 'active' // Only refetch if query is active
-        });
-      }
-
       // CRITICAL: Do NOT invalidate or refetch getChatHistory API
       // We have all required data from the chat API response:
       // - message_id: User message ID
@@ -266,15 +256,13 @@ export function useSendMessageMutation() {
 /**
  * Query hook for fetching chat list (sessions) - Legacy, use useChatsInfiniteQuery instead
  */
-export function useChatsQuery(visitorId: string | null) {
+export function useChatsQuery() {
   return useQuery({
-    queryKey: visitorId ? chatKeys.list(visitorId) : ["chats", "null"],
+    queryKey: ["chats", "list"],
     queryFn: async () => {
-      if (!visitorId) return [];
-      const { sessions } = await listSessions(visitorId);
+      const { sessions } = await listSessions();
       return sessions;
     },
-    enabled: !!visitorId,
     staleTime: 1000 * 60 * 2, // 2 minutes
     refetchOnWindowFocus: false,
   });
@@ -285,15 +273,12 @@ export function useChatsQuery(visitorId: string | null) {
  * Initial load: 10 sessions, then loads more on scroll
  * Follows TanStack Query infinite query pattern: https://tanstack.com/query/v5/docs/framework/react/guides/infinite-queries
  */
-export function useChatsInfiniteQuery(visitorId: string | null) {
+export function useChatsInfiniteQuery() {
   return useInfiniteQuery({
-    queryKey: visitorId ? [...chatKeys.list(visitorId), "infinite"] : ["chats", "null", "infinite"],
+    queryKey: ["chats", "list", "infinite"],
     queryFn: async ({ pageParam = 0 }) => {
-      if (!visitorId) {
-        return { sessions: [], hasMore: false, total: 0 };
-      }
       const limit = pageParam === 0 ? 10 : 20; // First page: 10, subsequent: 20
-      const { sessions, hasMore, total } = await listSessions(visitorId, undefined, limit, pageParam);
+      const { sessions, hasMore, total } = await listSessions(limit, pageParam);
       // Return page data directly (sessions array) - TanStack Query will wrap it in pages array
       return {
         sessions,
@@ -301,7 +286,6 @@ export function useChatsInfiniteQuery(visitorId: string | null) {
         total,
       };
     },
-    enabled: !!visitorId,
     initialPageParam: 0,
     getNextPageParam: (lastPage, _allPages, lastPageParam) => {
       // Return undefined when there's no more data (per TanStack Query docs)
@@ -324,20 +308,14 @@ export function useChatsInfiniteQuery(visitorId: string | null) {
  */
 export function useCreateSessionMutation() {
   const queryClient = useQueryClient();
-  const { visitorId } = useSessionStore();
 
   return useMutation({
     mutationFn: async () => {
-      if (!visitorId) {
-        throw new Error("Visitor ID is required");
-      }
-      return await createSession(visitorId);
+      return await createSession();
     },
     onMutate: async () => {
-      if (!visitorId) return;
-
       // Cancel ongoing refetches to prevent race conditions
-      await queryClient.cancelQueries({ queryKey: [...chatKeys.list(visitorId), "infinite"] });
+      await queryClient.cancelQueries({ queryKey: ["chats", "list", "infinite"] });
     },
     onError: (_err) => {
       // No rollback needed since we don't optimistically update
@@ -345,121 +323,62 @@ export function useCreateSessionMutation() {
     },
     onSuccess: (session) => {
       // Only add session to chat list after successful creation
-      if (visitorId) {
-        queryClient.setQueryData<{
-          pages: Array<{ sessions: Session[]; hasMore: boolean; total: number }>;
-          pageParams: number[];
-        }>([...chatKeys.list(visitorId), "infinite"], (old) => {
-          if (!old) {
-            // If no existing data, create new structure with the session
-            return {
-              pages: [{ sessions: [session], hasMore: false, total: 1 }],
-              pageParams: [0],
-            };
-          }
-          // Add new session to the beginning of the first page
-          const firstPage = old.pages[0] || { sessions: [], hasMore: false, total: 0 };
-          // Check if session already exists (avoid duplicates)
-          const sessionExists = firstPage.sessions.some((s) => s.id === session.id);
-          if (sessionExists) {
-            return old;
-          }
+      queryClient.setQueryData<{
+        pages: Array<{ sessions: Session[]; hasMore: boolean; total: number }>;
+        pageParams: number[];
+      }>(["chats", "list", "infinite"], (old) => {
+        if (!old) {
+          // If no existing data, create new structure with the session
           return {
-            ...old,
-            pages: [
-              {
-                ...firstPage,
-                sessions: [session, ...firstPage.sessions],
-                total: (firstPage.total || 0) + 1,
-              },
-              ...old.pages.slice(1),
-            ],
+            pages: [{ sessions: [session], hasMore: false, total: 1 }],
+            pageParams: [0],
           };
-        });
-      }
+        }
+        // Add new session to the beginning of the first page
+        const firstPage = old.pages[0] || { sessions: [], hasMore: false, total: 0 };
+        // Check if session already exists (avoid duplicates)
+        const sessionExists = firstPage.sessions.some((s) => s.id === session.id);
+        if (sessionExists) {
+          return old;
+        }
+        return {
+          ...old,
+          pages: [
+            {
+              ...firstPage,
+              sessions: [session, ...firstPage.sessions],
+              total: (firstPage.total || 0) + 1,
+            },
+            ...old.pages.slice(1),
+          ],
+        };
+      });
     },
     onSettled: () => {
       // Invalidate to ensure sync with server after mutation completes
-      if (visitorId) {
-        queryClient.invalidateQueries({ queryKey: chatKeys.list(visitorId) });
-      }
+      queryClient.invalidateQueries({ queryKey: ["chats", "list"] });
     },
   });
 }
 
 /**
- * Query hook for fetching suggestions
- * Only fetches if session is active (is_active: true)
- */
-export function useSuggestionsQuery(sessionId: string | null, enabled: boolean = true) {
-  const { visitorId } = useSessionStore();
-  const queryClient = useQueryClient();
-
-  return useQuery({
-    queryKey: sessionId ? chatKeys.suggestions(sessionId) : ["suggestions", "null"],
-    queryFn: async () => {
-      if (!sessionId || !visitorId || sessionId.startsWith("temp_new_chat_")) {
-        return { suggestions: [], session_id: sessionId || "", message_count: 0 };
-      }
-      
-      // Check if session is active from sessions cache
-      const sessionsData = queryClient.getQueryData<{
-        pages: Array<{ sessions: Array<{ id: string; is_active: boolean }> }>;
-      }>([...chatKeys.list(visitorId), "infinite"]);
-      
-      // Find session in all pages
-      let isSessionActive = true; // Default to true if not found in cache
-      if (sessionsData?.pages) {
-        const allSessions = sessionsData.pages.flatMap((page) => page.sessions);
-        const session = allSessions.find((s) => s.id === sessionId);
-        if (session) {
-          isSessionActive = session.is_active;
-        }
-      }
-      
-      // Don't call API if session is not active
-      if (!isSessionActive) {
-        return { suggestions: [], session_id: sessionId, message_count: 0 };
-      }
-      
-      // Check if suggestions are in conversation state cache
-      const cachedState = queryClient.getQueryData<{ suggestions: string[] }>([
-        ...chatKeys.messages(sessionId),
-        "state",
-      ]);
-      if (cachedState?.suggestions && cachedState.suggestions.length > 0) {
-        return {
-          suggestions: cachedState.suggestions,
-          session_id: sessionId,
-          message_count: 0,
-        };
-      }
-      
-      return await getSuggestions(sessionId, visitorId);
-    },
-    enabled: enabled && !!sessionId && !!visitorId && !sessionId.startsWith("temp_new_chat_"),
-    staleTime: 1000 * 60 * 5, // 5 minutes
-    refetchOnWindowFocus: false,
-  });
-}
-
-/**
- * Hook to get conversation state (needsInfo, isComplete) for a session
+ * Hook to get conversation state (needsInfo, isComplete, isSnoozed) for a session
  */
 export function useConversationState(sessionId: string | null) {
   const queryClient = useQueryClient();
   
   if (!sessionId || sessionId.startsWith("temp_new_chat_")) {
-    return { needsInfo: null, isComplete: false, suggestions: [] };
+    return { needsInfo: null, isComplete: false, suggestions: [], isSnoozed: false };
   }
 
   const state = queryClient.getQueryData<{
     needsInfo: "name" | "email" | "phone" | "issue" | null;
     isComplete: boolean;
     suggestions: string[];
+    isSnoozed?: boolean;
   }>([...chatKeys.messages(sessionId), "state"]);
 
-  return state || { needsInfo: null, isComplete: false, suggestions: [] };
+  return state || { needsInfo: null, isComplete: false, suggestions: [], isSnoozed: false };
 }
 
 /**
@@ -467,7 +386,6 @@ export function useConversationState(sessionId: string | null) {
  * Uses useQuery to ensure reactivity when cache updates
  */
 export function useSessionData(sessionId: string | null) {
-  const { visitorId } = useSessionStore();
   const queryClient = useQueryClient();
 
   interface SessionItem {
@@ -485,14 +403,12 @@ export function useSessionData(sessionId: string | null) {
 
   // Use useQuery to subscribe to cache changes
   const sessionsQuery = useQuery<SessionsCacheData | undefined>({
-    queryKey: visitorId ? [...chatKeys.list(visitorId), "infinite"] : ["sessions", "null"],
+    queryKey: ["chats", "list", "infinite"],
     queryFn: (): SessionsCacheData | undefined => {
       // This won't actually fetch - we're just subscribing to cache
-      if (!visitorId) return undefined;
-      const queryKey = [...chatKeys.list(visitorId), "infinite"];
-      return queryClient.getQueryData<SessionsCacheData>(queryKey);
+      return queryClient.getQueryData<SessionsCacheData>(["chats", "list", "infinite"]);
     },
-    enabled: !!visitorId && !!sessionId && !sessionId.startsWith("temp_new_chat_"),
+    enabled: !!sessionId && !sessionId.startsWith("temp_new_chat_"),
     staleTime: Infinity, // Never stale - we're just reading from cache
     gcTime: Infinity,
   });
@@ -506,3 +422,44 @@ export function useSessionData(sessionId: string | null) {
   };
 }
 
+
+
+/**
+ * Mutation hook for reactivating a snoozed session
+ */
+export function useReactivateSessionMutation() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (sessionId: string) => {
+      return await reactivateSession(sessionId);
+    },
+    onSuccess: (session, sessionId) => {
+      // Update session in sessions list cache to set is_active: true and status: ACTIVE
+      queryClient.setQueryData<{
+        pages: Array<{ sessions: Session[]; hasMore: boolean; total: number }>;
+        pageParams: number[];
+      }>(["chats", "list", "infinite"], (old) => {
+        if (!old) return old;
+
+        return {
+          ...old,
+          pages: old.pages.map((page) => ({
+            ...page,
+            sessions: page.sessions.map((s) =>
+              s.id === sessionId
+                ? { ...s, is_active: true, status: session.status }
+                : s
+            ),
+          })),
+        };
+      });
+
+      // Invalidate messages query to refetch if needed
+      queryClient.invalidateQueries({ queryKey: chatKeys.messages(sessionId) });
+    },
+    onError: (error: any) => {
+      console.error("Failed to reactivate session:", error);
+    },
+  });
+}

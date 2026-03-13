@@ -10,7 +10,7 @@ import { useWebSocketChat } from "../hooks/useWebSocketChat";
 import { updateSessionInList } from "../hooks/websocket/cacheUpdaters";
 import { useChatStore } from "../store/chatStore";
 import type { Message } from "../types";
-import { chatKeys, useConversationState, useCreateSessionMutation, useSessionData, useSuggestionsQuery } from "../useQueries";
+import { chatKeys, useConversationState, useCreateSessionMutation, useSessionData, useReactivateSessionMutation } from "../useQueries";
 import { MessageBubble } from "./MessageBubble";
 import { MessageInput, type MessageInputHandle } from "./MessageInput";
 import { Suggestions } from "./Suggestions";
@@ -32,7 +32,6 @@ export function ChatScreen({ chatId, onBack, onClose }: ChatScreenProps) {
   
   // Use TanStack Query hooks for async state
   const { hasLoaded, chatMessages, isLoading: isLoadingMessages } = useMessageLoader(chatId);
-  const { data: suggestionsData } = useSuggestionsQuery(chatId, true);
   const conversationState = useConversationState(chatId);
   const { isActive: isSessionActive } = useSessionData(chatId);
   
@@ -40,15 +39,17 @@ export function ChatScreen({ chatId, onBack, onClose }: ChatScreenProps) {
   const [isSending, setIsSending] = useState(false);
   const [actualSessionId, setActualSessionId] = useState<string>(chatId);
   const createSessionMutation = useCreateSessionMutation();
+  const reactivateSessionMutation = useReactivateSessionMutation();
   
   const { 
     isConnected, 
     sendMessage: sendWebSocketMessage,
     streamingContent,
     streamingMessageId,
+    connect: connectWebSocket,
   } = useWebSocketChat({
     sessionId: actualSessionId,
-    enabled: !chatId.startsWith("temp_new_chat_") && !!actualSessionId,
+    enabled: !chatId.startsWith("temp_new_chat_") && !!actualSessionId && !conversationState.isSnoozed,
     onError: (error) => {
       console.error("WebSocket error:", error);
       setIsSending(false);
@@ -70,6 +71,22 @@ export function ChatScreen({ chatId, onBack, onClose }: ChatScreenProps) {
       inputRef.current?.focus();
     }
   }, [isSending, chatMessages.length]);
+
+  // Check if the last message is a session_snooze message and update conversation state
+  useEffect(() => {
+    if (chatMessages.length > 0) {
+      const lastMessage = chatMessages[chatMessages.length - 1];
+      const isLastMessageSnooze = lastMessage.metadata?.type === "session_snooze";
+      
+      // If last message is session_snooze and conversation state doesn't reflect it, update it
+      if (isLastMessageSnooze && !conversationState.isSnoozed) {
+        queryClient.setQueryData([...chatKeys.messages(chatId), "state"], {
+          ...conversationState,
+          isSnoozed: true,
+        });
+      }
+    }
+  }, [chatMessages, conversationState.isSnoozed, chatId, queryClient, conversationState]);
 
   // Show initial greeting when chat is empty
   const showGreeting = chatMessages.length === 0 && !isLoadingMessages && !isSending;
@@ -220,11 +237,27 @@ export function ChatScreen({ chatId, onBack, onClose }: ChatScreenProps) {
     // TODO: Implement with infinite query if needed
   };
 
+  const handleUnsnooze = async () => {
+    try {
+      await reactivateSessionMutation.mutateAsync(chatId);
+      // Update conversation state to mark as not snoozed
+      queryClient.setQueryData([...chatKeys.messages(chatId), "state"], {
+        ...conversationState,
+        isSnoozed: false,
+      });
+      // Reconnect WebSocket after reactivation
+      console.log("Reconnecting WebSocket after session reactivation...");
+      connectWebSocket();
+    } catch (error) {
+      console.error("Failed to unsnooze session:", error);
+    }
+  };
+
   // Static suggestions for new chat only
   const staticSuggestions = [
-    "What is a novated lease?",
-    "How does FBT exemption work?",
-    "What EVs are available?",
+    "Connect with team",
+    "Get a quote",
+    "Apply for lease",
   ];
 
   // Determine which suggestions to show
@@ -233,6 +266,7 @@ export function ChatScreen({ chatId, onBack, onClose }: ChatScreenProps) {
   // 2. Streaming content exists (WebSocket is streaming)
   // 3. There's a streaming message in the chat (waiting for complete)
   const isNewChat = chatMessages.length === 0;
+  const hasUserMessages = chatMessages.some((msg) => msg.role === "user");
   const hasStreamingMessage = chatMessages.some(
     (msg) => msg.id === "streaming" || msg.id.startsWith("streaming_")
   );
@@ -243,16 +277,19 @@ export function ChatScreen({ chatId, onBack, onClose }: ChatScreenProps) {
   let suggestionsToShow: string[] = [];
   
   if (shouldShowSuggestions) {
-    if (isNewChat) {
-      // New chat: Show all 3 static suggestions
+    if (isNewChat || !hasUserMessages) {
+      // New chat or no user messages yet: Show static suggestions
       suggestionsToShow = staticSuggestions;
     } else {
-      // Chat has started: Show suggestions from API/conversation state
-      const apiSuggestions = suggestionsData?.suggestions || conversationState.suggestions || [];
-      // Take top 3 from API suggestions
-      suggestionsToShow = apiSuggestions.slice(0, 3);
+      // Chat has started with user messages: Show suggestions from WebSocket/conversation state only
+      const webSocketSuggestions = conversationState.suggestions || [];
+      // Take top 3 from WebSocket suggestions
+      suggestionsToShow = webSocketSuggestions.slice(0, 3);
     }
   }
+
+  // Temporary debug - force show suggestions for testing
+  const forceShowSuggestions = !hasUserMessages && !isSending;
 
   // Build display messages - chatMessages already includes typing indicator and streaming messages
   const displayMessages: Message[] = [...chatMessages];
@@ -322,9 +359,9 @@ export function ChatScreen({ chatId, onBack, onClose }: ChatScreenProps) {
                   );
                 })}
                   {/* Show suggestions after messages, only if not complete */}
-                  {!isSending && shouldShowSuggestions && suggestionsToShow.length > 0 && (
+                  {((!isSending && shouldShowSuggestions && suggestionsToShow.length > 0) || forceShowSuggestions) && (
                     <Suggestions
-                      suggestions={suggestionsToShow}
+                      suggestions={forceShowSuggestions ? staticSuggestions : suggestionsToShow}
                       isLoading={false}
                       onSelect={handleSuggestionClick}
                   />
@@ -344,7 +381,25 @@ export function ChatScreen({ chatId, onBack, onClose }: ChatScreenProps) {
       </div>
 
       <div style={{ flexShrink: 0, borderTop: '1px solid var(--widget-border)', background: 'var(--widget-bg)' }}>
-        {conversationState.isComplete || !isSessionActive ? (
+        {conversationState.isSnoozed ? (
+          <div className="widget-p-4 flex justify-center" style={{ textAlign: 'center' }}>
+            <Button 
+              onClick={handleUnsnooze} 
+              disabled={reactivateSessionMutation.isPending}
+              size="sm"
+              style={{ width: '100%', maxWidth: '200px' }}
+            >
+              {reactivateSessionMutation.isPending ? (
+                <>
+                  <Loader2 className="widget-loader-spinner" style={{ width: '1rem', height: '1rem', marginRight: '0.5rem' }} />
+                  Resuming...
+                </>
+              ) : (
+                "Unsnooze and Resume Chat"
+              )}
+            </Button>
+          </div>
+        ) : conversationState.isComplete || !isSessionActive ? (
           <div className="widget-p-4" style={{ textAlign: 'center' }}>
             <div className="widget-text-sm widget-font-medium" style={{ color: '#16a34a', marginBottom: '0.25rem' }}>✓ Conversation Complete</div>
             <div className="widget-text-xs widget-text-muted">Thank you! Our team will contact you shortly.</div>

@@ -8,6 +8,27 @@ interface MessageRendererProps {
   isUser?: boolean;
 }
 
+// Custom link component that opens in new tab
+const LinkComponent = ({ href, children, ...props }: any) => {
+  return (
+    <a
+      href={href}
+      target="_blank"
+      rel="noopener noreferrer"
+      style={{
+        color: 'var(--widget-primary)',
+        textDecoration: 'underline',
+        fontWeight: '500',
+        cursor: 'pointer',
+      }}
+      className="widget-message-link"
+      {...props}
+    >
+      {children}
+    </a>
+  );
+};
+
 export function MessageRenderer({ content, isUser = false }: MessageRendererProps) {
   const baseStyles = {
     maxWidth: '100%',
@@ -22,6 +43,9 @@ export function MessageRenderer({ content, isUser = false }: MessageRendererProp
       <ReactMarkdown
         remarkPlugins={[remarkGfm, remarkBreaks]}
         rehypePlugins={[rehypeHighlight]}
+        components={{
+          a: LinkComponent,
+        }}
       >
         {content}
       </ReactMarkdown>

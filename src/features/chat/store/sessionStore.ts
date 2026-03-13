@@ -1,66 +1,26 @@
 import { create } from "zustand";
 import type { Session as SessionType } from "../types";
-import { getWidgetConfig, listSessions, createVisitor, validateVisitor, type Session as ApiSession } from "../api";
+import { getWidgetConfig, listSessions, type Session as ApiSession } from "../api";
 import axios from "@/lib/axios";
-
-const VISITOR_ID_KEY = "whipsmart_visitor_id";
 
 interface SessionStore extends SessionType {
   initialize: () => Promise<void>;
   widgetConfig: any | null;
   error: string | null;
-  visitorId: string | null;
   conversationType: "sales" | "support" | "knowledge" | null;
   loadUserSessions: () => Promise<ApiSession[]>;
-  initVisitor: () => Promise<string>;
   setConversationType: (type: "sales" | "support" | "knowledge") => void;
 }
 
-export const useSessionStore = create<SessionStore>((set, get) => ({
+export const useSessionStore = create<SessionStore>((set) => ({
   sessionId: "",
   widgetApiKey: "",
   initialized: false,
   widgetConfig: null,
   error: null,
-  visitorId: null,
   conversationType: null,
   setConversationType: (type: "sales" | "support" | "knowledge") => {
     set({ conversationType: type });
-  },
-  initVisitor: async (): Promise<string> => {
-    // Check localStorage for existing visitor_id
-    let visitorId = localStorage.getItem(VISITOR_ID_KEY);
-    
-    if (visitorId) {
-      // Validate existing visitor
-      try {
-        console.log("🔍 Validating existing visitor:", visitorId);
-        await validateVisitor(visitorId);
-        console.log("✅ Visitor ID is valid");
-        set({ visitorId });
-        return visitorId;
-      } catch (error: any) {
-        console.warn("⚠️ Visitor ID is invalid, creating new visitor:", error);
-        // Remove invalid visitor_id from localStorage
-        localStorage.removeItem(VISITOR_ID_KEY);
-      }
-    }
-    
-    // Create new visitor
-    console.log("➕ Creating new visitor...");
-    try {
-      const visitor = await createVisitor();
-      visitorId = visitor.id;
-      localStorage.setItem(VISITOR_ID_KEY, visitorId);
-      console.log("✅ Created new visitor:", visitorId);
-      set({ visitorId });
-      return visitorId;
-    } catch (error: any) {
-      console.error("❌ Failed to create visitor:", error);
-      throw new Error(
-        error.response?.data?.message || error.message || "Failed to create visitor"
-      );
-    }
   },
   initialize: async () => {
     try {
@@ -80,72 +40,75 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
       console.log("🔑 API Key:", apiKey.substring(0, 10) + "...");
       console.log("🌐 API URL:", apiUrl || "Using default");
 
-      // Update axios baseURL if apiUrl is provided
+      // Set axios defaults
       if (apiUrl) {
         axios.defaults.baseURL = apiUrl;
         console.log("✅ Axios baseURL set to:", apiUrl);
       }
+      axios.defaults.headers.common["X-API-Key"] = apiKey;
 
-      // Verify API key and get widget config
-      console.log("🔍 Verifying API key...");
-      let config;
+      // Get widget configuration from backend
+      console.log("🌐 Fetching widget config from backend...");
       try {
-        config = await getWidgetConfig();
-        console.log("✅ API key verified, config received:", config);
-      } catch (error: any) {
-        console.error("❌ API key verification failed:", error);
-        throw new Error(
-          error.response?.data?.message || error.message || "Failed to verify API key"
-        );
+        const config = await getWidgetConfig();
+        console.log("✅ Widget config loaded:", config);
+        
+        set({
+          widgetApiKey: apiKey,
+          widgetConfig: config,
+          initialized: true,
+          error: null,
+        });
+
+        console.log("✅ Widget initialization complete - backend will resolve visitor from IP");
+      } catch (configError: any) {
+        console.error("❌ Failed to fetch widget config:", configError);
+        
+        // Provide specific error messages for common issues
+        let errorMessage = "Failed to initialize widget";
+        if (configError.response?.status === 401) {
+          errorMessage = "Invalid API key. Please check your widget configuration.";
+        } else if (configError.response?.status === 403) {
+          errorMessage = "Access denied. Please check your API key permissions.";
+        } else if (configError.response?.status === 404) {
+          errorMessage = "Widget configuration not found. Please check your API endpoint.";
+        } else if (configError.code === 'NETWORK_ERROR' || !configError.response) {
+          errorMessage = "Cannot connect to server. Please check if the backend is running.";
+        } else {
+          errorMessage = configError.response?.data?.message || configError.message || errorMessage;
+        }
+        
+        set({
+          error: errorMessage,
+          initialized: false,
+        });
+        throw new Error(errorMessage);
       }
-
-      // Initialize visitor (check localStorage, validate, or create)
-      console.log("👤 Initializing visitor...");
-      const visitorId = await get().initVisitor();
-      console.log("✅ Visitor initialized:", visitorId);
-
-      // Load existing sessions for this visitor (will be loaded in chatStore)
-      console.log("📋 Sessions will be loaded in chat store...");
-      
-      console.log("✅ Widget initialized successfully:", {
-        visitorId: visitorId,
-        config: config,
-      });
-      
-      set({
-        sessionId: "", // Will be set when user selects a chat
-        widgetApiKey: apiKey,
-        widgetConfig: config,
-        visitorId: visitorId,
-        initialized: true,
-        error: null,
-      });
     } catch (error: any) {
-      console.error("❌ Failed to initialize widget:", error);
-      console.error("Error details:", {
-        message: error.message,
-        response: error.response?.data,
-        status: error.response?.status,
-      });
-      set({
-        initialized: false,
-        error: error.message || "Failed to initialize widget",
-      });
+      console.error("❌ Widget initialization failed:", error);
+      // Error handling is now done in the config fetch try-catch above
+      if (!error.message.includes("Invalid API key") && !error.message.includes("Access denied")) {
+        const errorMessage = error.response?.data?.message || error.message || "Failed to initialize widget";
+        set({
+          error: errorMessage,
+          initialized: false,
+        });
+      }
+      throw error;
     }
   },
   loadUserSessions: async (): Promise<ApiSession[]> => {
-    const state = get();
-    if (!state.visitorId) {
-      return [];
-    }
-
     try {
-      const { sessions } = await listSessions(state.visitorId, true);
+      console.log("📋 Loading user sessions...");
+      // Backend now automatically filters by IP-resolved visitor and excludes INACTIVE sessions
+      const { sessions } = await listSessions(20, 0);
+      console.log(`✅ Loaded ${sessions.length} sessions`);
       return sessions;
-    } catch (error) {
-      console.error("Failed to load user sessions:", error);
-      return [];
+    } catch (error: any) {
+      console.error("❌ Failed to load sessions:", error);
+      throw new Error(
+        error.response?.data?.message || error.message || "Failed to load sessions"
+      );
     }
   },
 }));
-

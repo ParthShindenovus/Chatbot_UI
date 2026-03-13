@@ -29,8 +29,10 @@ axiosInstance.interceptors.request.use((config) => {
   // Add API key header if available (from widget config or env)
   const currentConfig = getApiConfig();
   if (currentConfig.apiKey) {
+    // Send API key in X-API-Key header (most common for API keys)
     config.headers['X-API-Key'] = currentConfig.apiKey;
-    config.headers['Authorization'] = `Bearer ${currentConfig.apiKey}`;
+    // Remove Authorization header to avoid conflicts
+    delete config.headers['Authorization'];
   }
   
   // Placeholder for future token handling

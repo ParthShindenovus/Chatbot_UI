@@ -3,7 +3,7 @@
  * Single Responsibility: Get WebSocket URL from API config
  */
 
-export function getWebSocketUrl(sessionId?: string, visitorId?: string): string {
+export function getWebSocketUrl(sessionId?: string): string {
   const apiUrl =
     (window as any).__CHAT_WIDGET_CONFIG__?.apiUrl ||
     import.meta.env.VITE_API_URL ||
@@ -33,19 +33,13 @@ export function getWebSocketUrl(sessionId?: string, visitorId?: string): string 
     }
   }
 
-  // Build base URL
+  // Build base URL - backend now resolves visitor from IP automatically
   let finalUrl = `${wsUrl}/ws/chat/`;
   
-  // Add query parameters if provided (some backends require auth in URL)
-  const params = new URLSearchParams();
+  // Add session_id if provided (backend uses this for session context)
   if (sessionId && !sessionId.startsWith("temp_new_chat_")) {
+    const params = new URLSearchParams();
     params.append("session_id", sessionId);
-  }
-  if (visitorId) {
-    params.append("visitor_id", visitorId);
-  }
-  
-  if (params.toString()) {
     finalUrl += `?${params.toString()}`;
   }
   

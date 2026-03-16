@@ -476,14 +476,13 @@ export function updateCompleteMessage(
     suggestions: suggestions,
   });
 
-  // Update suggestions cache
-  if (suggestions.length > 0) {
-    queryClient.setQueryData(chatKeys.suggestions(sessionId), {
-      suggestions: suggestions,
-      session_id: sessionId,
-      message_count: 0,
-    });
-  }
+  // Update suggestions cache - always set, even if empty array
+  // This ensures we explicitly mark when there are no suggestions available
+  queryClient.setQueryData(chatKeys.suggestions(sessionId), {
+    suggestions: suggestions,
+    session_id: sessionId,
+    message_count: 0,
+  });
   
   // Play notification sound when response and recommendations are received
   // Play for all complete responses (responseId indicates a complete response was received)

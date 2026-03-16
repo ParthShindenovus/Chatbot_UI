@@ -232,18 +232,14 @@ export function useSendMessageMutation() {
         }
       );
 
-      // Update suggestions cache if provided in API response
-      if (data.suggestions && data.suggestions.length > 0) {
+      // Update suggestions cache - always set, even if empty array
+      // This ensures we explicitly mark when there are no suggestions available
+      // Only update if suggestions field is present in response (even if empty)
+      if (data.suggestions !== undefined) {
         queryClient.setQueryData(chatKeys.suggestions(data.actualSessionId), {
           suggestions: data.suggestions,
           session_id: data.actualSessionId,
           message_count: 0,
-        });
-      } else {
-        // If no suggestions in response, invalidate to trigger API call
-        queryClient.invalidateQueries({ 
-          queryKey: chatKeys.suggestions(data.actualSessionId),
-          refetchType: 'active' // Only refetch if query is active
         });
       }
 

@@ -36,7 +36,12 @@ export interface MessageHandlerCallbacks {
   }) => void;
   onConnected?: (sessionId: string, suggestions: string[], conversationData: Record<string, any>) => void;
   onIdleWarning?: (message: string, sessionId: string, responseId: string) => void;
-  onSessionEnd?: (message: string, sessionId: string, responseId: string) => void;
+  onSessionEnd?: (
+    message: string,
+    sessionId: string,
+    responseId: string,
+    metadata?: Record<string, any>
+  ) => void;
   onError?: (error: Error) => void;
 }
 
@@ -98,7 +103,7 @@ export function handleWebSocketMessage(
 
     case "session_end":
       if (data.message && data.session_id && data.response_id) {
-        callbacks.onSessionEnd?.(data.message, data.session_id, data.response_id);
+        callbacks.onSessionEnd?.(data.message, data.session_id, data.response_id, data.metadata);
       }
       return streamingState;
 

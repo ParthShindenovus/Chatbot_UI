@@ -135,11 +135,11 @@ export function useWebSocketChat({
                   addIdleWarningMessage(queryClient, sessionId, message, responseId);
                 }
               },
-              onSessionEnd: (message, endSessionId, responseId) => {
+              onSessionEnd: (message, endSessionId, responseId, metadata) => {
                 // Only handle session end if it's for the current session
                 if (endSessionId === sessionId) {
                   console.log("Session ended:", message);
-                  addSessionEndMessage(queryClient, sessionId, message, responseId);
+                  addSessionEndMessage(queryClient, sessionId, message, responseId, metadata);
                   // Disconnect WebSocket when session ends
                   if (connectionRef.current) {
                     connectionRef.current.disconnect();

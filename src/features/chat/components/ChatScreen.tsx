@@ -256,6 +256,11 @@ export function ChatScreen({ chatId, onBack, onClose }: ChatScreenProps) {
 
   // Build display messages - chatMessages already includes typing indicator and streaming messages
   const displayMessages: Message[] = [...chatMessages];
+  const latestSessionEndMessage = [...displayMessages]
+    .reverse()
+    .find((msg) => msg.metadata?.type === "session_end");
+  const sessionEndReason = latestSessionEndMessage?.metadata?.reason;
+  const isIdleTimeoutEnd = sessionEndReason === "idle_timeout";
 
   return (
     <div className="widget-flex widget-flex-col" style={{ height: '100%', minHeight: 0 }}>
@@ -346,8 +351,14 @@ export function ChatScreen({ chatId, onBack, onClose }: ChatScreenProps) {
       <div style={{ flexShrink: 0, borderTop: '1px solid var(--widget-border)', background: 'var(--widget-bg)' }}>
         {conversationState.isComplete || !isSessionActive ? (
           <div className="widget-p-4" style={{ textAlign: 'center' }}>
-            <div className="widget-text-sm widget-font-medium" style={{ color: '#16a34a', marginBottom: '0.25rem' }}>✓ Conversation Complete</div>
-            <div className="widget-text-xs widget-text-muted">Thank you! Our team will contact you shortly.</div>
+            <div className="widget-text-sm widget-font-medium" style={{ color: '#16a34a', marginBottom: '0.25rem' }}>
+              {isIdleTimeoutEnd ? "Session Ended" : "✓ Conversation Complete"}
+            </div>
+            <div className="widget-text-xs widget-text-muted">
+              {isIdleTimeoutEnd
+                ? "This chat ended due to inactivity. Start a new message anytime to continue."
+                : "Thank you! Our team will contact you shortly."}
+            </div>
           </div>
         ) : (
           <>

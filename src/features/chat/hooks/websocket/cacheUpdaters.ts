@@ -569,7 +569,8 @@ export function addSessionEndMessage(
   queryClient: QueryClient,
   sessionId: string,
   message: string,
-  responseId: string
+  responseId: string,
+  metadata?: Record<string, any>
 ) {
   const sessionEndMessage: Message = {
     id: responseId || `session_end_${Date.now()}`,
@@ -578,7 +579,7 @@ export function addSessionEndMessage(
     role: "assistant",
     timestamp: new Date(),
     isRead: false,
-    metadata: { type: "session_end" }, // Add metadata to identify as session_end
+    metadata: { type: "session_end", ...(metadata || {}) }, // Preserve server metadata (e.g. reason: idle_timeout)
   };
 
   queryClient.setQueryData<{ messages: Message[]; hasMore: boolean; total: number }>(

@@ -183,6 +183,27 @@
   margin-bottom: 0 !important;
 }
 
+/* Style links in message content with underline - Must come after global reset */
+#chat-widget-container .widget-message-content a,
+.chat-widget-isolated .widget-message-content a,
+.chat-widget-wrapper .widget-message-content a,
+#chat-widget-container .widget-message-bubble a,
+.chat-widget-isolated .widget-message-bubble a,
+.chat-widget-wrapper .widget-message-bubble a {
+  text-decoration: underline !important;
+  color: var(--widget-primary) !important;
+  cursor: pointer !important;
+}
+
+#chat-widget-container .widget-message-content a:hover,
+.chat-widget-isolated .widget-message-content a:hover,
+.chat-widget-wrapper .widget-message-content a:hover,
+#chat-widget-container .widget-message-bubble a:hover,
+.chat-widget-isolated .widget-message-bubble a:hover,
+.chat-widget-wrapper .widget-message-bubble a:hover {
+  opacity: 0.8 !important;
+}
+
 /* Override background reset for typing dots - Must come after global reset */
 #chat-widget-container .widget-typing-dot,
 .chat-widget-isolated .widget-typing-dot,

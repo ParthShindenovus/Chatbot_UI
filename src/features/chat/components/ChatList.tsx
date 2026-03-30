@@ -146,8 +146,9 @@ export function ChatList({ onClose, onSelectChat }: ChatListProps) {
         <div className="widget-flex widget-items-center widget-gap-1">
           <Button 
             onClick={handleCreateChat} 
-            size="icon" 
+            size="sm" 
             variant="ghost" 
+            className="widget-flex widget-items-center widget-gap-2"
             style={{ flexShrink: 0 }}
             disabled={isCreatingChat}
           >
@@ -156,7 +157,7 @@ export function ChatList({ onClose, onSelectChat }: ChatListProps) {
             ) : (
               <Plus style={{ width: '1rem', height: '1rem' }} />
             )}
-            <span className="widget-sr-only">New chat</span>
+            <span className="widget-text-sm">Start new chat</span>
           </Button>
           {onClose && (
             <Button onClick={onClose} size="icon" variant="ghost" className="widget-shrink-0" style={{ flexShrink: 0 }} aria-label="Close chat">

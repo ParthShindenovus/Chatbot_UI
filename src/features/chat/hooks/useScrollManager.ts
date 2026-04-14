@@ -17,9 +17,8 @@ export function useScrollManager(
   const previousScrollHeightRef = useRef(0);
   const isInitialLoadRef = useRef(true);
   const shouldScrollToBottomRef = useRef(true);
-  const previousStreamingContentRef = useRef<string>("");
 
-  // Find scroll viewport reference
+  // Find scroll viewport reference and auto-scroll on initial message load
   useEffect(() => {
     const findViewport = () => {
       if (scrollAreaRef.current) {
@@ -34,13 +33,34 @@ export function useScrollManager(
       return false;
     };
 
-    if (!findViewport()) {
-      const timer = setTimeout(() => {
-        findViewport();
-      }, 50);
-      return () => clearTimeout(timer);
+    const runInitialScroll = () => {
+      if (
+        scrollViewportRef.current &&
+        isInitialLoadRef.current &&
+        messages.length > 0
+      ) {
+        const viewport = scrollViewportRef.current;
+        requestAnimationFrame(() => {
+          viewport.scrollTop = viewport.scrollHeight;
+          isInitialLoadRef.current = false;
+          shouldScrollToBottomRef.current = false;
+        });
+      }
+    };
+
+    if (findViewport()) {
+      runInitialScroll();
+      return;
     }
-  }, [chatId]);
+
+    const timer = setTimeout(() => {
+      if (findViewport()) {
+        runInitialScroll();
+      }
+    }, 50);
+
+    return () => clearTimeout(timer);
+  }, [chatId, messages.length]);
 
   // Handle scroll position when messages change or streaming content updates
   useEffect(() => {
@@ -48,14 +68,8 @@ export function useScrollManager(
 
     const viewport = scrollViewportRef.current;
     const currentMessageCount = messages.length;
-    const previousMessageCount = previousMessageCountRef.current;
     const currentScrollHeight = viewport.scrollHeight;
     const previousScrollHeight = previousScrollHeightRef.current;
-    const currentStreamingContent = streamingContent || "";
-    const previousStreamingContent = previousStreamingContentRef.current;
-
-    const isNewMessage = currentMessageCount > previousMessageCount;
-    const isStreamingUpdate = currentStreamingContent !== previousStreamingContent && currentStreamingContent.length > previousStreamingContent.length;
     const isInitialLoad = isInitialLoadRef.current;
 
     if (isInitialLoad && messages.length > 0) {
@@ -76,18 +90,11 @@ export function useScrollManager(
         });
       }
       shouldScrollToBottomRef.current = false;
-    } else if ((isNewMessage || isStreamingUpdate) && shouldScrollToBottomRef.current) {
-      // Scroll to bottom for new messages or streaming content updates
-      requestAnimationFrame(() => {
-        if (viewport) {
-          viewport.scrollTop = viewport.scrollHeight;
-        }
-      });
     }
+    // After initial load and older message loads, we do NOT auto-scroll on new messages or streaming.
 
     previousMessageCountRef.current = currentMessageCount;
     previousScrollHeightRef.current = viewport.scrollHeight;
-    previousStreamingContentRef.current = currentStreamingContent;
   }, [messages.length, isLoadingOlder, chatId, streamingContent]);
 
   // Track user scroll to determine if we should auto-scroll

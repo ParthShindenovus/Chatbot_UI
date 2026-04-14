@@ -1,6 +1,6 @@
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { InfiniteScrollContainer, ScrollToBottom } from "@/shared/components";
+import { InfiniteScrollContainer } from "@/shared/components";
 import { useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft, Loader2, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
@@ -56,7 +56,7 @@ export function ChatScreen({ chatId, onBack, onClose }: ChatScreenProps) {
   });
   
   // Scroll management - pass streamingContent to trigger scroll on WebSocket updates
-  const { scrollAreaRef, scrollViewportRef, enableAutoScroll } = useScrollManager(
+  const { scrollAreaRef, scrollViewportRef } = useScrollManager(
     chatMessages,
     false, // isLoadingOlder - can be added later with infinite query
     chatId,
@@ -79,7 +79,6 @@ export function ChatScreen({ chatId, onBack, onClose }: ChatScreenProps) {
     if (isSending || !content.trim()) return;
     
     try {
-      enableAutoScroll();
       setIsSending(true);
       
       // Handle temp chat - create session first
@@ -334,13 +333,6 @@ export function ChatScreen({ chatId, onBack, onClose }: ChatScreenProps) {
                       onSelect={handleSuggestionClick}
                   />
                   )}
-                <ScrollToBottom 
-                  messages={displayMessages} 
-                  smooth 
-                  scrollContainer={scrollViewportRef.current}
-                  streamingContent={streamingContent}
-                  suggestions={shouldShowSuggestions ? suggestionsToShow : []}
-                />
               </InfiniteScrollContainer>
             )}
           </div>
